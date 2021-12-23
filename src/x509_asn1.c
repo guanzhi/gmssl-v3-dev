@@ -338,14 +338,14 @@ static int x509_rdn_check(int oid, int tag, const char *str, int len)
 				error_print();
 				return -1;
 			}
-			if (x509_rdns[i].is_printable_string_only && tag != ASN1_TAG_PrintableString) {
-				error_print();
-				return -1;
-			}
-			if (len < x509_rdns[i].minlen || len > x509_rdns[i].maxlen) {
-				error_print();
-				return -1;
-			}
+//			if (x509_rdns[i].is_printable_string_only && tag != ASN1_TAG_PrintableString) {
+//				error_print();
+//				return -1;
+//			}
+//			if (len < x509_rdns[i].minlen || len > x509_rdns[i].maxlen) {
+//				error_print();
+//				return -1;
+//			}
 		}
 	}
 	return 1;
@@ -1027,33 +1027,20 @@ int x509_tbs_certificate_from_der(X509_TBS_CERTIFICATE *a, const uint8_t **in, s
 		error_print();
 		return -1;
 	}
-
-	// FIXME: 应该提供了检查函数，可以返回错误行数			
-	if (a->serial_number_len > 20
-		|| issuer_unique_id_nbits != 32 * 8
-		|| subject_unique_id_nbits != 32 * 8) {
-
-		error_print();
-		return -1;
-	}
-
-	a->issuer_unique_id_len = issuer_unique_id_nbits/8;
-	a->subject_unique_id_len = subject_unique_id_nbits/8;
-
-
-	// asn1_implicit_bit_string_from_der 返回的是比特长度！
-	// 应该改变 issue			
-
-
-	// FIXME: 这几个都应该用copy的方式
-	memcpy(a->serial_number, serial_number, a->serial_number_len);
-	if (issuer_unique_id) {
-		memcpy(a->issuer_unique_id, issuer_unique_id, a->issuer_unique_id_len);
-	}
-	if (subject_unique_id) {
-		memcpy(a->subject_unique_id, subject_unique_id, a->subject_unique_id_len);
-	}
-
+    // asn1_implicit_bit_string_from_der 返回的是比特长度！
+    memcpy(a->serial_number, serial_number, a->serial_number_len);
+    if (issuer_unique_id_nbits > 0){
+        a->issuer_unique_id_len = issuer_unique_id_nbits/8;
+        if (issuer_unique_id) {
+            memcpy(a->issuer_unique_id, issuer_unique_id, a->issuer_unique_id_len);
+        }
+    }
+	if (subject_unique_id_nbits > 0){
+        a->subject_unique_id_len = subject_unique_id_nbits/8;
+        if (subject_unique_id) {
+            memcpy(a->subject_unique_id, subject_unique_id, a->subject_unique_id_len);
+        }
+    }
 	return 1;
 }
 

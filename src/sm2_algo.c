@@ -1497,7 +1497,7 @@ int sm2_do_verify(const SM2_KEY *key, const uint8_t dgst[32], const SM2_SIGNATUR
 	if (bn_cmp(e, r) == 0) {
 		return 1;
 	} else {
-		error_print(); // 此处不应该打印错误，因为验证失败是预期的返回结果之一
+		// error_print(); // 此处不应该打印错误，因为验证失败是预期的返回结果之一
 		return 0;
 	}
 }
