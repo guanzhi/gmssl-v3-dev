@@ -1,17 +1,49 @@
-﻿/* 
- *   Copyright 2014-2021 The GmSSL Project Authors. All Rights Reserved.
+﻿/*
+ * Copyright (c) 2021 - 2021 The GmSSL Project.  All rights reserved.
  *
- *   Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
- *       http://www.apache.org/licenses/LICENSE-2.0
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *   See the License for the specific language governing permissions and
- *   limitations under the License.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * 3. All advertising materials mentioning features or use of this
+ *    software must display the following acknowledgment:
+ *    "This product includes software developed by the GmSSL Project.
+ *    (http://gmssl.org/)"
+ *
+ * 4. The name "GmSSL Project" must not be used to endorse or promote
+ *    products derived from this software without prior written
+ *    permission. For written permission, please contact
+ *    guanzhi1980@gmail.com.
+ *
+ * 5. Products derived from this software may not be called "GmSSL"
+ *    nor may "GmSSL" appear in their names without prior written
+ *    permission of the GmSSL Project.
+ *
+ * 6. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by the GmSSL Project
+ *    (http://gmssl.org/)"
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE GmSSL PROJECT ``AS IS'' AND ANY
+ * EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE GmSSL PROJECT OR
+ * ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <stdio.h>
@@ -30,39 +62,45 @@ int main(int argc, char **argv)
 {
 	int ret;
 	char *prog = argv[0];
-	const char *keyfile = NULL;
-	const char *certfile = NULL;
-	FILE *keyfp = NULL;
+	char *pubkeyfile = NULL;
+	char *certfile = NULL;
+	char *infile = NULL;
+	char *outfile = NULL;
+	FILE *pubkeyfp = NULL;
 	FILE *certfp = NULL;
+	FILE *infp = stdin;
+	FILE *outfp = stdout;
 	X509_CERTIFICATE cert;
 	SM2_KEY key;
 	uint8_t inbuf[SM2_MAX_PLAINTEXT_SIZE];
-	ssize_t inlen;
 	uint8_t outbuf[SM2_MAX_CIPHERTEXT_SIZE];
-	size_t outlen = sizeof(outbuf);
-
-	if (argc < 2) {
-bad:
-		fprintf(stderr, "%s : error options\n", prog);
-help:
-		fprintf(stderr, "usage:\n");
-		fprintf(stderr, "    %s -pubkey key.pem < file\n", prog);
-		fprintf(stderr, "    %s -cert cert.pem < file\n", prog);
-		fprintf(stderr, "\n");
-		return 1;
-	}
+	size_t inlen, outlen = sizeof(outbuf);
 
 	argc--;
 	argv++;
+
 	while (argc > 1) {
 		if (!strcmp(*argv, "-help")) {
-			goto help;
+help:
+			fprintf(stderr, "usage: %s {-pubkey pem | -cert pem} [-in file] [-out file]\n", prog);
+			return -1;
+
 		} else if (!strcmp(*argv, "-pubkey")) {
 			if (--argc < 1) goto bad;
-			keyfile = *(++argv);
+			pubkeyfile = *(++argv);
+
 		} else if (!strcmp(*argv, "-cert")) {
 			if (--argc < 1) goto bad;
 			certfile = *(++argv);
+
+		} else if (!strcmp(*argv, "-in")) {
+			if (--argc < 1) goto bad;
+			infile = *(++argv);
+
+		} else if (!strcmp(*argv, "-out")) {
+			if (--argc < 1) goto bad;
+			outfile = *(++argv);
+
 		} else {
 			goto help;
 		}
@@ -70,20 +108,16 @@ help:
 		argv++;
 	}
 
-	if ((!keyfile && !certfile) || (keyfile && certfile)) {
-		error_print();
-		return -1;
-	}
-	if (keyfile) {
-		if (!(keyfp = fopen(keyfile, "r"))) {
+	if (pubkeyfile) {
+		if (!(pubkeyfp = fopen(pubkeyfile, "r"))) {
 			error_print();
 			return -1;
 		}
-		if (sm2_public_key_info_from_pem(&key, keyfp) != 1) {
+		if (sm2_public_key_info_from_pem(&key, pubkeyfp) != 1) {
 			error_print();
 			return -1;
 		}
-	} else {
+	} else if (certfile) {
 		if (!(certfp = fopen(certfile, "r"))) {
 			error_print();
 			return -1;
@@ -96,9 +130,26 @@ help:
 			error_print();
 			return -1;
 		}
+	} else {
+		fprintf(stderr, "%s: '-pubkey' or '-cert' required\n", prog);
+		goto help;
 	}
 
-	if ((inlen = read(STDIN_FILENO, inbuf, sizeof(inbuf))) <= 0) {
+	if (infile) {
+		if (!(infp = fopen(infile, "rb"))) {
+			error_print();
+			return -1;
+		}
+	}
+	if (outfile) {
+		if (!(outfp = fopen(outfile, "wb"))) {
+			error_print();
+			return -1;
+		}
+	}
+
+
+	if ((inlen = fread(inbuf, 1, sizeof(inbuf), infp)) <= 0) {
 		error_print();
 		return -1;
 	}
@@ -106,6 +157,14 @@ help:
 		error_print();
 		return -1;
 	}
-	format_bytes(stdout, 0, 0, "", outbuf, outlen);
-	return 1;
+
+	if (outlen != fwrite(outbuf, 1, outlen, outfp)) {
+		error_print();
+		return -1;
+	}
+	return 0;
+
+bad:
+	fprintf(stderr, "%s: '%s' option value required\n", prog, *argv);
+	return -1;
 }
