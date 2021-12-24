@@ -180,13 +180,15 @@ int tlcp_certificate_chain_verify(const uint8_t *data, size_t datalen, FILE *ca_
 			return -1;
 		}
 	} else {
-		if (x509_certificate_from_pem_by_name(&ca_cert, ca_certs_fp, &sign_cert.tbs_certificate.issuer) != 1
-			|| x509_certificate_verify_by_certificate(&sign_cert, &ca_cert) != 1) {
+        if (x509_certificate_from_pem_by_name(&ca_cert, ca_certs_fp, &sign_cert.tbs_certificate.issuer) != 1){
+            error_print();
+            return -1;
+        }
+		if (x509_certificate_verify_by_certificate(&sign_cert, &ca_cert) != 1) {
 			error_print();
 			return -1;
 		}
-		if (x509_certificate_from_pem_by_name(&ca_cert, ca_certs_fp, &enc_cert.tbs_certificate.issuer) != 1
-			|| x509_certificate_verify_by_certificate(&enc_cert, &ca_cert) != 1) {
+		if (x509_certificate_verify_by_certificate(&enc_cert, &ca_cert) != 1) {
 			error_print();
 			return -1;
 		}
