@@ -115,16 +115,11 @@ int tlcp_record_get_handshake_server_key_exchange_pke(const uint8_t *record,
 		error_print();
 		return -1;
 	}
-	/*
-	if (tls_uint16array_copy_from_bytes(sig, siglen, *siglen, &p, &len) != 1
+	if (tls_uint16array_copy_from_bytes(sig, siglen, len-2, &p, &len) != 1
 		|| len > 0) {
 		error_print();
 		return -1;
 	}
-	*/
-	// FIXME: check *siglen >= len
-	memcpy(sig, p, len);
-	*siglen = len;
 	return 1;
 }
 
