@@ -79,7 +79,7 @@ int pem_read(FILE *fp, const char *name, uint8_t *data, size_t *datalen)
 	BASE64_CTX ctx;
 
 	snprintf(begin_line, sizeof(begin_line), "-----BEGIN %s-----\n", name);
-	snprintf(end_line, sizeof(end_line), "-----END %s-----\n", name);
+	snprintf(end_line, sizeof(end_line), "-----END %s-----", name);
 
 	if (!fgets(line, sizeof(line), fp)) {
 		//FIXME: feof 判断是不是文件结束了呢
@@ -101,7 +101,7 @@ int pem_read(FILE *fp, const char *name, uint8_t *data, size_t *datalen)
 			error_print();
 			return -1;
 		}
-		if (strcmp(line, end_line) == 0) {
+		if (strncmp(line, end_line, strlen(end_line)) == 0) {
 			break;
 		}
 

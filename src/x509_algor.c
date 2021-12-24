@@ -386,10 +386,11 @@ int x509_signature_algor_from_der(int *algor, uint32_t *nodes, size_t *nodes_cou
 		return -1;
 	}
 
-	if (has_null_obj && asn1_null_from_der(&data, &datalen) != 1) {
-		error_print();
-		return -1;
-	}
+    // 如果 在读取了algorithm 后还有剩余，那么尝试读取NULL，解决可选参数 parameters 为NULL的情况
+    if (datalen > 0 && asn1_null_from_der(&data, &datalen) != 1) {
+        error_print();
+        return -1;
+    }
 	if (datalen) {
 		error_print();
 		return -1;
