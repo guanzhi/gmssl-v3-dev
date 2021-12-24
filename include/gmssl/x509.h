@@ -135,7 +135,7 @@ typedef struct {
 	int oids[8];
 	int tags[8];
 
-	char country[3]; // printableString
+	char country[65]; // printableString
 	char state_or_province[129];
 	char locality[129];
 	char org[65];
