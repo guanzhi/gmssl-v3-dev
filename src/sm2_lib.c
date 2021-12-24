@@ -170,24 +170,25 @@ int sm2_compute_z(uint8_t z[32], const SM2_POINT *pub, const char *id)
 		return -1;
 	}
 
-	if (strcmp(id, "1234567812345678") == 0) {
-		uint32_t digest[8] = {
-			0xadadedb5U, 0x0446043fU, 0x08a87aceU, 0xe86d2243U,
-			0x8e232383U, 0xbfc81fe2U, 0xcf9117c8U, 0x4707011dU,
-		};
-		memcpy(&zin[128], pub->x, 32);
-		memcpy(&zin[160], pub->y, 32);
-		sm3_compress_blocks(digest, zin, 2);
-		PUTU32(z     , digest[0]);
-		PUTU32(z +  4, digest[1]);
-		PUTU32(z +  8, digest[2]);
-		PUTU32(z + 12, digest[3]);
-		PUTU32(z + 16, digest[4]);
-		PUTU32(z + 20, digest[5]);
-		PUTU32(z + 24, digest[6]);
-		PUTU32(z + 28, digest[7]);
+//	if (strcmp(id, "1234567812345678") == 0) {
+//		uint32_t digest[8] = {
+//			0xadadedb5U, 0x0446043fU, 0x08a87aceU, 0xe86d2243U,
+//			0x8e232383U, 0xbfc81fe2U, 0xcf9117c8U, 0x4707011dU,
+//		};
+//		memcpy(&zin[128], pub->x, 32);
+//		memcpy(&zin[160], pub->y, 32);
+//		sm3_compress_blocks(digest, zin, 2);
+//		PUTU32(z     , digest[0]);
+//		PUTU32(z +  4, digest[1]);
+//		PUTU32(z +  8, digest[2]);
+//		PUTU32(z + 12, digest[3]);
+//		PUTU32(z + 16, digest[4]);
+//		PUTU32(z + 20, digest[5]);
+//		PUTU32(z + 24, digest[6]);
+//		PUTU32(z + 28, digest[7]);
+//
+//	} else {
 
-	} else {
 		SM3_CTX ctx;
 		uint8_t idbits[2];
 		size_t len;
@@ -203,7 +204,7 @@ int sm2_compute_z(uint8_t z[32], const SM2_POINT *pub, const char *id)
 		sm3_update(&ctx, pub->x, 32);
 		sm3_update(&ctx, pub->y, 32);
 		sm3_finish(&ctx, z);
-	}
+//	}
 
 	return 1;
 }

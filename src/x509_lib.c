@@ -88,7 +88,7 @@ int x509_certificate_set_serial_number(X509_CERTIFICATE *cert, const uint8_t *sn
 
 int x509_certificate_set_signature_algor_sm2(X509_CERTIFICATE *cert)
 {
-	cert->tbs_certificate.signature_algor = OID_sm2sign_with_sm3;
+	cert->tbs_certificate.signature_algor.algorithm = OID_sm2sign_with_sm3;
 	cert->signature_algor = OID_sm2sign_with_sm3;
 	return 1;
 }
@@ -116,7 +116,7 @@ int x509_certificate_set_validity(X509_CERTIFICATE *cert, time_t not_before, int
 
 int x509_certificate_set_signature_algor(X509_CERTIFICATE *cert, int oid)
 {
-	cert->tbs_certificate.signature_algor = oid;
+	cert->tbs_certificate.signature_algor.algorithm = oid;
 	return 1;
 }
 

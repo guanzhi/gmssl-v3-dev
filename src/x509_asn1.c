@@ -959,13 +959,13 @@ int x509_tbs_certificate_to_der(const X509_TBS_CERTIFICATE *a, uint8_t **out, si
 
 	if (x509_version_to_der(a->version, NULL, &len) != 1
 		|| asn1_integer_to_der(a->serial_number, a->serial_number_len, NULL, &len) != 1
-		|| x509_signature_algor_to_der(a->signature_algor, NULL, &len) != 1
+		|| x509_signature_algor_null_to_der(a->signature_algor.algorithm,a->signature_algor.has_null_obj, NULL, &len) != 1
 		|| x509_name_to_der(&a->issuer, NULL, &len) != 1
 		|| x509_validity_to_der(&a->validity, NULL, &len) != 1
 		|| x509_name_to_der(&a->subject, NULL, &len) != 1
 		|| x509_public_key_info_to_der(&a->subject_public_key_info, NULL, &len) != 1
-		|| asn1_implicit_bit_string_to_der(1, a->issuer_unique_id, a->issuer_unique_id_len * 8, NULL, &len) < 0
-		|| asn1_implicit_bit_string_to_der(2, a->subject_unique_id, a->subject_unique_id_len * 8, NULL, &len) <0
+		|| (a->issuer_unique_id_len  && asn1_implicit_bit_string_to_der(1, a->issuer_unique_id, a->issuer_unique_id_len * 8, NULL, &len) < 0)
+		|| (a->subject_unique_id_len && asn1_implicit_bit_string_to_der(2, a->subject_unique_id, a->subject_unique_id_len * 8, NULL, &len) <0)
 		|| x509_extensions_to_der(&a->extensions, NULL, &len) < 0)  {
 		error_print();
 		return -1;
@@ -973,13 +973,13 @@ int x509_tbs_certificate_to_der(const X509_TBS_CERTIFICATE *a, uint8_t **out, si
 	if (asn1_sequence_header_to_der(len, out, outlen) != 1
 		|| x509_version_to_der(a->version, out, outlen) != 1
 		|| asn1_integer_to_der(a->serial_number, a->serial_number_len, out, outlen) != 1
-		|| x509_signature_algor_to_der(a->signature_algor, out, outlen) != 1
+		|| x509_signature_algor_null_to_der(a->signature_algor.algorithm,a->signature_algor.has_null_obj, out, outlen) != 1
 		|| x509_name_to_der(&a->issuer, out, outlen) != 1
 		|| x509_validity_to_der(&a->validity, out, outlen) != 1
 		|| x509_name_to_der(&a->subject, out, outlen) != 1
 		|| x509_public_key_info_to_der(&a->subject_public_key_info, out, outlen) != 1
-		|| asn1_implicit_bit_string_to_der(1, a->issuer_unique_id, a->issuer_unique_id_len * 8, out, outlen) < 0
-		|| asn1_implicit_bit_string_to_der(2, a->subject_unique_id, a->subject_unique_id_len * 8, out, outlen) < 0
+		|| (a->issuer_unique_id_len  && asn1_implicit_bit_string_to_der(1, a->issuer_unique_id, a->issuer_unique_id_len * 8, out, outlen) < 0)
+		|| (a->subject_unique_id_len && asn1_implicit_bit_string_to_der(2, a->subject_unique_id, a->subject_unique_id_len * 8, out, outlen) < 0)
 		|| x509_extensions_to_der(&a->extensions, out, outlen) < 0) {
 		error_print();
 		return -1;
@@ -1015,7 +1015,7 @@ int x509_tbs_certificate_from_der(X509_TBS_CERTIFICATE *a, const uint8_t **in, s
 
 	if (x509_version_from_der(&a->version, &data, &datalen) != 1
 		|| asn1_integer_from_der(&serial_number, &a->serial_number_len, &data, &datalen) != 1
-		|| x509_signature_algor_from_der(&a->signature_algor, nodes, &nodes_count, &data, &datalen) != 1
+		|| x509_signature_algor_null_from_der(&(a->signature_algor.algorithm), &(a->signature_algor.has_null_obj), nodes, &nodes_count, &data, &datalen) != 1
 		|| x509_name_from_der(&a->issuer, &data, &datalen) != 1
 		|| x509_validity_from_der(&a->validity, &data, &datalen) != 1
 		|| x509_name_from_der(&a->subject, &data, &datalen) != 1
@@ -1146,7 +1146,7 @@ int x509_certificate_print(FILE *fp, const X509_CERTIFICATE *a, int format, int 
 	indent += 4;
 	format_print(fp, format, indent, "Version : %s (%d)\n", x509_version_name(tbs->version), tbs->version);
 	format_bytes(fp, format, indent, "SerialNumber : ", tbs->serial_number, tbs->serial_number_len);
-	format_print(fp, format, indent, "SigantureAlgorithm : %s\n", asn1_object_identifier_name(tbs->signature_algor));
+	format_print(fp, format, indent, "SigantureAlgorithm : %s\n", asn1_object_identifier_name(tbs->signature_algor.algorithm));
 	format_print(fp, format, indent, "Issuer\n");
 	x509_name_print(fp, &tbs->issuer, format, indent + 4);
 	format_print(fp, format, indent, "Validity\n");
