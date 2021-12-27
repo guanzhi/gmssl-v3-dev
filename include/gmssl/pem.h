@@ -64,7 +64,16 @@ extern "C" {
 int pem_read(FILE *fp, const char *name, uint8_t *data, size_t *datalen);
 int pem_write(FILE *fp, const char *name, const uint8_t *data, size_t datalen);
 
-
+/**
+ * 从字符串中读取PEM格式
+ * @param in 字符串
+ * @param str_len 字符串长度
+ * @param name PEM头名称
+ * @param data 解码输出位置
+ * @param datalen 解码后长度
+ * @return 0 - OK
+ */
+int pem_str_read(uint8_t *in,size_t str_len, const char *name, uint8_t *data, size_t *datalen);
 
 #ifdef __cplusplus
 }

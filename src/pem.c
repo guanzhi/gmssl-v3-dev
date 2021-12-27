@@ -53,64 +53,120 @@
 #include <gmssl/error.h>
 
 
-int pem_write(FILE *fp, const char *name, const uint8_t *data, size_t datalen)
-{
-	int ret = 0;
-	BASE64_CTX ctx;
-	uint8_t b64[datalen * 2];
-	int len;
+int pem_write(FILE *fp, const char *name, const uint8_t *data, size_t datalen) {
+    int ret = 0;
+    BASE64_CTX ctx;
+    uint8_t b64[datalen * 2];
+    int len;
 
-	base64_encode_init(&ctx);
-	base64_encode_update(&ctx, data, (int)datalen, b64, &len);
-	base64_encode_finish(&ctx, b64 + len, &len);
+    base64_encode_init(&ctx);
+    base64_encode_update(&ctx, data, (int) datalen, b64, &len);
+    base64_encode_finish(&ctx, b64 + len, &len);
 
-	ret += fprintf(fp, "-----BEGIN %s-----\n", name);
-	ret += fprintf(fp, "%s", (char *)b64);
-	ret += fprintf(fp, "-----END %s-----\n", name);
-	return ret;
+    ret += fprintf(fp, "-----BEGIN %s-----\n", name);
+    ret += fprintf(fp, "%s", (char *) b64);
+    ret += fprintf(fp, "-----END %s-----\n", name);
+    return ret;
 }
 
-int pem_read(FILE *fp, const char *name, uint8_t *data, size_t *datalen)
-{
-	char line[80];
-	char begin_line[80];
-	char end_line[80];
-	int len;
-	BASE64_CTX ctx;
+int pem_read(FILE *fp, const char *name, uint8_t *data, size_t *datalen) {
+    char line[80];
+    char begin_line[80];
+    char end_line[80];
+    int len;
+    BASE64_CTX ctx;
 
-	snprintf(begin_line, sizeof(begin_line), "-----BEGIN %s-----\n", name);
-	snprintf(end_line, sizeof(end_line), "-----END %s-----", name);
+    snprintf(begin_line, sizeof(begin_line), "-----BEGIN %s-----\n", name);
+    snprintf(end_line, sizeof(end_line), "-----END %s-----", name);
 
-	if (!fgets(line, sizeof(line), fp)) {
-		//FIXME: feof 判断是不是文件结束了呢
-		return 0;
-	}
+    if (!fgets(line, sizeof(line), fp)) {
+        //FIXME: feof 判断是不是文件结束了呢
+        return 0;
+    }
 
-	if (strcmp(line, begin_line) != 0) {
-		// FIXME: 这里是不是应该容忍一些错误呢？
-		error_print();
-		return -1;
-	}
+    if (strcmp(line, begin_line) != 0) {
+        // FIXME: 这里是不是应该容忍一些错误呢？
+        error_print();
+        return -1;
+    }
 
-	*datalen = 0;
+    *datalen = 0;
 
-	base64_decode_init(&ctx);
+    base64_decode_init(&ctx);
 
-	for (;;) {
-		if (!fgets(line, sizeof(line), fp)) {
-			error_print();
-			return -1;
-		}
-		if (strncmp(line, end_line, strlen(end_line)) == 0) {
-			break;
-		}
+    for (;;) {
+        if (!fgets(line, sizeof(line), fp)) {
+            error_print();
+            return -1;
+        }
+        if (strncmp(line, end_line, strlen(end_line)) == 0) {
+            break;
+        }
 
-		base64_decode_update(&ctx, (uint8_t *)line, strlen(line), data, &len);
-		data += len;
-		*datalen += len;
-	}
+        base64_decode_update(&ctx, (uint8_t *) line, strlen(line), data, &len);
+        data += len;
+        *datalen += len;
+    }
 
-	base64_decode_finish(&ctx, data, &len);
-	*datalen += len;
-	return 1;
+    base64_decode_finish(&ctx, data, &len);
+    *datalen += len;
+    return 1;
+}
+
+/**
+ * 从字符串中读取PEM格式
+ * @param in 字符串
+ * @param str_len 字符串长度
+ * @param name PEM头名称
+ * @param data 解码输出位置
+ * @param datalen 解码后长度
+ * @return 0 - OK
+ */
+int pem_str_read(uint8_t *in, size_t str_len, const char *name, uint8_t *data, size_t *datalen) {
+    BASE64_CTX ctx;
+    char begin_line[80];
+    char end_line[80];
+
+    uint8_t *line = NULL;
+    int line_len = 0;
+
+    int len = 0;
+    int i = 0;
+
+    snprintf(begin_line, sizeof(begin_line), "-----BEGIN %s-----\n", name);
+    snprintf(end_line, sizeof(end_line), "-----END %s-----", name);
+    base64_decode_init(&ctx);
+
+    for (i = 0; i < str_len; ++i) {
+        if (in[i] != '\n') {
+            line_len++;
+            continue;
+        }
+        // 读取出一行
+        if (line == NULL) {
+            line = in;
+        } else {
+            line = &in[i] - line_len;
+        }
+
+        // 第一行
+        if (strncmp((const char *) line, begin_line, strlen(begin_line)) == 0) {
+            line_len = 0;
+            continue;
+        }
+        // 最后一行
+        if (strncmp((const char *) line, end_line, strlen(end_line)) == 0) {
+            break;
+        }
+        if (base64_decode_update(&ctx, line, line_len, data, &len) == -1) {
+            // 非BASE64错误
+            return -1;
+        }
+        *datalen += len;
+        data += len;
+        line_len = 0;
+    }
+    base64_decode_finish(&ctx, data, &len);
+    *datalen += len;
+    return 0;
 }
