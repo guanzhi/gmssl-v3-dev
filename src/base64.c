@@ -375,3 +375,23 @@ int base64_decode_finish(BASE64_CTX *ctx, uint8_t *out, int *outl)
     } else
         return (1);
 }
+
+
+int base64_str_decode(const uint8_t *in, int inlen, uint8_t *out, int *outlen) {
+    BASE64_CTX ctx;
+    int ret = 0;
+    int len = 0;
+    base64_decode_init(&ctx);
+    ret = base64_decode_update(&ctx, in, inlen, out, &len);
+    if (ret != 0) {
+        return -1;
+    }
+    *outlen = len;
+    out += len;
+    ret = base64_decode_finish(&ctx, out, &len);
+    if (ret != 1) {
+        return -1;
+    }
+    *outlen += len;
+    return 0;
+}
