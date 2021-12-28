@@ -335,7 +335,14 @@ int x509_certificate_from_pem_by_name(X509_CERTIFICATE *cert, FILE *certs_fp, co
 
 int x509_certificate_verify_by_certificate(const X509_CERTIFICATE *cert, const X509_CERTIFICATE *cacert);
 
-
+/**
+ * 从字节串中解析X509数字证书，支持Base64、Hex、PEM、DER
+ * @param a 证书指针
+ * @param in 待解析字符串、或DER字节串
+ * @param inlen 输入数据长度
+ * @return -1 解析失败；1解析成功
+ */
+int x509_certificate_from_bytes(X509_CERTIFICATE *a,const uint8_t *in, size_t inlen);
 
 
 

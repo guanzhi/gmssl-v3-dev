@@ -95,7 +95,7 @@ int base64_decode_block(unsigned char *t, const unsigned char *f, int n);
  * @param inlen 字符串长度
  * @param out  解码存储位置
  * @param outlen  解码后字节长度
- * @return
+ * @return 0 解码成功;-1 解码异常
  */
 int base64_str_decode(const uint8_t *in, int inlen, uint8_t *out, int *outlen);
 

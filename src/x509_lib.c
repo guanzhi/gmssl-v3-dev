@@ -61,6 +61,8 @@
 #include <gmssl/oid.h>
 #include <gmssl/asn1.h>
 #include <gmssl/x509.h>
+#include <gmssl/pem.h>
+#include <gmssl/hex.h>
 #include <gmssl/error.h>
 
 
@@ -237,4 +239,43 @@ int x509_certificate_from_pem_by_name(X509_CERTIFICATE *cert, FILE *fp, const X5
 		}
 	}
 	return 0;
+}
+
+// 从字节串中解析X509数字证书，支持Base64、Hex、PEM、DER
+int x509_certificate_from_bytes(X509_CERTIFICATE *a, const uint8_t *in, size_t inlen) {
+    uint8_t der[1024];
+    const uint8_t *cp = der;
+
+    size_t der_len = 0;
+    int len = 0;
+
+    const char start_line[] = "-----BEGIN CERTIFICATE-----";
+
+    if (in == NULL || inlen == 0) {
+        return -1;
+    }
+    // 尝试1 DER ASN1 Sequence 格式
+    // Class: 0, P/C=C(1)  tag: 0x10 => 30 (SEQUENCE)
+    if ((in[0] & 0xFF) == 0x30) {
+        return x509_certificate_from_der(a, &in, &inlen);
+    }
+
+    // 尝试2 PEM格式
+    if (strncmp((const char *) in, start_line, strlen(start_line)) == 0) {
+        if (pem_str_read((uint8_t *) in, inlen, "CERTIFICATE", der, &der_len) == 0) {
+            return x509_certificate_from_der(a, &cp, &der_len);
+        }
+    }
+    // 尝试3 Base64格式
+    len = (int)der_len;
+    if (base64_str_decode(in, (int)inlen, der, &len) == 0) {
+        der_len = len;
+        return x509_certificate_from_der(a, &cp, &der_len);
+    }
+    // 尝试4 Hex格式
+    if (hex_to_bytes((const char *) in, inlen, der, &der_len) != -1 ){
+        return x509_certificate_from_der(a, &cp, &der_len);
+    }
+    // 上述手段都无法解码
+    return -1;
 }
