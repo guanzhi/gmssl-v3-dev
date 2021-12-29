@@ -188,7 +188,7 @@ int sm2_ciphertext_from_der(SM2_CIPHERTEXT *a, const uint8_t **in, size_t *inlen
 }
 
 /*
-from RFC 5915
+from RFC 5915 见《GM/T0010-2012》 附录A.3
 
 ECPrivateKey ::= SEQUENCE {
 	version INTEGER,		-- value MUST be ecPrivkeyVer1(1)
@@ -305,6 +305,46 @@ int sm2_private_key_from_der(SM2_KEY *key, const uint8_t **in, size_t *inlen)
 	}
 
 	return 1;
+}
+/*
+from RFC 5208 Cap.5
+
+PrivateKeyInfo ::= SEQUENCE {
+  version                   Version,
+  privateKeyAlgorithm       PrivateKeyAlgorithmIdentifier,
+  privateKey                PrivateKey,
+  attributes           [0]  IMPLICIT Attributes OPTIONAL
+}
+
+Version ::= INTEGER
+PrivateKeyAlgorithmIdentifier ::= AlgorithmIdentifier
+PrivateKey ::= OCTET STRING
+Attributes ::= SET OF Attribute
+*/
+int sm2_private_key_from_pkcs8_der(SM2_KEY *key, const uint8_t **in, size_t *inlen)
+{
+    int ret;
+    const uint8_t *data;
+    size_t datalen;
+    int version;
+    const uint8_t *prikey;
+    const uint8_t *attributes;
+    size_t prikey_len;
+    size_t attributes_len;
+
+    if ((ret = asn1_sequence_from_der(&data, &datalen, in, inlen)) != 1) {
+        if (ret < 0) error_print();
+        return ret;
+    }
+    if (asn1_int_from_der(&version, &data, &datalen) != 1
+        || sm2_public_key_algor_from_der(&data, &datalen) != 1
+        || asn1_octet_string_from_der(&prikey, &prikey_len, &data, &datalen) < 0
+        || asn1_explicit_from_der(0, &attributes, &attributes_len, &data, &datalen) < 0
+        || datalen > 0) {
+        return -1;
+    }
+    // 暂时忽略对 AlgorithmIdentifier 判断，直接解析ECPrivateKey结构
+    return sm2_private_key_from_der(key,&prikey ,&prikey_len);
 }
 
 /*
@@ -529,19 +569,55 @@ int sm2_private_key_to_pem(const SM2_KEY *a, FILE *fp)
 int sm2_private_key_from_pem(SM2_KEY *a, FILE *fp)
 {
 	uint8_t buf[512];
-	const uint8_t *cp = buf;
+    const uint8_t *cp = buf;
+    const uint8_t *cp2 = buf;
 	size_t len;
+    size_t src_len;
 
 	if (pem_read(fp, "EC PRIVATE KEY", buf, &len) != 1) {
 		error_print();
 		return -1;
 	}
-	if (sm2_private_key_from_der(a, &cp, &len) != 1
-		|| len > 0) {
-		error_print();
-		return -1;
+    src_len = len;
+    // 尝试解析X962 RFC 5915格式
+	if (sm2_private_key_from_der(a, &cp, &len) == 1) {
+		return 1;
 	}
+    // 尝试解析PKCS8格式
+    len = src_len;
+    if (sm2_private_key_from_pkcs8_der(a, &cp2, &len) != 1){
+        error_print();
+        return -1;
+    }
+
 	return 1;
+}
+
+int sm2_private_key_from_str_pem(SM2_KEY *key, uint8_t *in, size_t inlen){
+    uint8_t buf[512];
+    const uint8_t *cp = buf;
+    const uint8_t *cp2 = buf;
+    size_t len;
+    size_t src_len;
+
+    if (pem_str_read(in, inlen,"EC PRIVATE KEY", buf, &len) != 1) {
+        if (pem_str_read(in, inlen,"SM2 PRIVATE KEY", buf, &len) != 1) {
+            error_print();
+            return -1;
+        }
+    }
+    src_len = len;
+    // 尝试解析X962 RFC 5915格式
+    if (sm2_private_key_from_der(key, &cp, &len) == 1) {
+        return 1;
+    }
+    // 尝试解析PKCS8格式
+    len = src_len;
+    if (sm2_private_key_from_pkcs8_der(key, &cp2, &len) != 1){
+        error_print();
+        return -1;
+    }
+    return 1;
 }
 
 int sm2_public_key_info_to_pem(const SM2_KEY *a, FILE *fp)

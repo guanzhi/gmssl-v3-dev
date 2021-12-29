@@ -120,7 +120,7 @@ int pem_read(FILE *fp, const char *name, uint8_t *data, size_t *datalen) {
  * @param name PEM头名称
  * @param data 解码输出位置
  * @param datalen 解码后长度
- * @return 0 - OK
+ * @return 0 - OK,-1 error
  */
 int pem_str_read(uint8_t *in, size_t str_len, const char *name, uint8_t *data, size_t *datalen) {
     BASE64_CTX ctx;

@@ -51,6 +51,7 @@
 #include <stdlib.h>
 #include <gmssl/oid.h>
 #include <gmssl/sm2.h>
+#include <gmssl/pem.h>
 #include <gmssl/error.h>
 
 
@@ -168,13 +169,36 @@ end:
 	return err;
 }
 
+void test_sm2_parse_pkcs8__private_key(void)
+{
+     uint8_t str[]="-----BEGIN EC PRIVATE KEY-----\n\
+MIGTAgEAMBMGByqGSM49AgEGCCqBHM9VAYItBHkwdwIBAQQgmfgsjOI+jhOcwu7f\n\
+Cy6PYSYBmjAzTijLaJicJorUEsmgCgYIKoEcz1UBgi2hRANCAAQJTFguoSNb/TEX\n\
+XwY1w3Xw+79W3YFg3JWQlJVx2FZmzWuT8x6aIeiciv0wuwuaYfocUC3OHwkRKqhf\n\
+CkPArdH2\n\
+-----END EC PRIVATE KEY-----";
+     uint8_t buf[1024];
+     const uint8_t *cp = buf;
+     size_t len = 0;
+     SM2_KEY  key;
 
+     if (pem_str_read(str, strlen(str), "EC PRIVATE KEY", buf, &len) != 0){
+         error_puts("无法解析PEM");
+         return;
+     }
+
+    if (sm2_private_key_from_pkcs8_der(&key, &cp, &len) != 1){
+        error_puts("PKCS8解码失败");
+        return;
+    }
+}
 
 int main(void)
 {
 	test_sm2_point_octets();
 	test_sm2_private_key();
 	test_sm2_public_key_info();
+    test_sm2_parse_pkcs8__private_key();
 	return 0;
 }
 

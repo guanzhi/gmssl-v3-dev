@@ -98,8 +98,29 @@ int sm2_public_key_digest(const SM2_KEY *key, uint8_t dgst[32]);
 int sm2_private_key_to_der(const SM2_KEY *key, uint8_t **out, size_t *outlen);
 int sm2_private_key_to_pem(const SM2_KEY *key, FILE *fp);
 int sm2_private_key_from_der(SM2_KEY *key, const uint8_t **in, size_t *inlen);
+/**
+ * 从PEM文件中读取密钥，支持pkcs8、X962（RFC 5915）格式
+ * @param key 密钥
+ * @param fp 文件
+ * @return 1 成功；-1 失败
+ */
 int sm2_private_key_from_pem(SM2_KEY *key, FILE *fp);
-
+/**
+ * 解析PKCS8格式SM2私钥
+ * @param key SM2私钥
+ * @param in 字节串
+ * @param inlen 输出长度
+ * @return  1 成功；-1 解析失败
+ */
+int sm2_private_key_from_pkcs8_der(SM2_KEY *key, const uint8_t **in, size_t *inlen);
+/**
+ * 从PEM字符串中读取密钥,支持pkcs8、X962（RFC 5915）格式
+ * @param a 密钥
+ * @param in 字符串
+ * @param inlen 字符串长度
+ * @return 1 解析成功;-1解析失败
+ */
+int sm2_private_key_from_str_pem(SM2_KEY *key, uint8_t *in, size_t inlen);
 
 // AlgorithmIdentifier
 int sm2_public_key_algor_to_der(uint8_t **out, size_t *outlen);
