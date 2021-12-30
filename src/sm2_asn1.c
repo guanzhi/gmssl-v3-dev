@@ -600,8 +600,8 @@ int sm2_private_key_from_str_pem(SM2_KEY *key, uint8_t *in, size_t inlen){
     size_t len;
     size_t src_len;
 
-    if (pem_str_read(in, inlen,"EC PRIVATE KEY", buf, &len) != 1) {
-        if (pem_str_read(in, inlen,"SM2 PRIVATE KEY", buf, &len) != 1) {
+    if (pem_read_str(in, inlen, "EC PRIVATE KEY", buf, &len) != 1) {
+        if (pem_read_str(in, inlen, "SM2 PRIVATE KEY", buf, &len) != 1) {
             error_print();
             return -1;
         }

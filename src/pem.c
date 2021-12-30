@@ -120,9 +120,9 @@ int pem_read(FILE *fp, const char *name, uint8_t *data, size_t *datalen) {
  * @param name PEM头名称
  * @param data 解码输出位置
  * @param datalen 解码后长度
- * @return 0 - OK,-1 error
+ * @return 1 - OK,-1 error
  */
-int pem_str_read(uint8_t *in, size_t str_len, const char *name, uint8_t *data, size_t *datalen) {
+int pem_read_str(uint8_t *in, size_t str_len, const char *name, uint8_t *data, size_t *datalen) {
     BASE64_CTX ctx;
     char begin_line[80];
     char end_line[80];
@@ -168,5 +168,5 @@ int pem_str_read(uint8_t *in, size_t str_len, const char *name, uint8_t *data, s
     }
     base64_decode_finish(&ctx, data, &len);
     *datalen += len;
-    return 0;
+    return 1;
 }

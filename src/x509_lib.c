@@ -262,7 +262,7 @@ int x509_certificate_from_bytes(X509_CERTIFICATE *a, const uint8_t *in, size_t i
 
     // 尝试2 PEM格式
     if (strncmp((const char *) in, start_line, strlen(start_line)) == 0) {
-        if (pem_str_read((uint8_t *) in, inlen, "CERTIFICATE", der, &der_len) == 0) {
+        if (pem_read_str((uint8_t *) in, inlen, "CERTIFICATE", der, &der_len) == 1) {
             return x509_certificate_from_der(a, &cp, &der_len);
         }
     }

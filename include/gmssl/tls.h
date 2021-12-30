@@ -446,6 +446,18 @@ typedef struct {
 int tlcp_connect(TLS_CONNECT *conn, const char *hostname, int port,
 	FILE *ca_certs_fp, FILE *client_certs_fp, const SM2_KEY *client_sign_key);
 
+/**
+ * 服务端接受一个TLCP连接
+ * @param conn TLCP连接上下文
+ * @param port 端口
+ * @param server_certs_fp 服务端签名证书和加密证书PEM文件
+ * @param server_sign_key 服务端签名密钥对
+ * @param server_enc_key 服务端加密密钥对
+ * @param client_cacerts_fp 客户端根证书PEM文件，用于验证客户端证书，仅在需要双向身份认证时使用。
+ * @param client_cert_verify_buf 客户端证书校验消息缓冲区，仅在需要双向身份认证时使用。
+ * @param client_cert_verify_buflen 缓冲区长度
+ * @return 1 - 连接成功；-1 - 连接失败
+ */
 int tlcp_accept(TLS_CONNECT *conn, int port,
 	FILE *server_certs_fp, const SM2_KEY *server_sign_key, const SM2_KEY *server_enc_key,
 	FILE *client_cacerts_fp, uint8_t *client_cert_verify_buf, size_t client_cert_verify_buflen);

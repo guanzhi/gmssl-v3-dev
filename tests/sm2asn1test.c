@@ -182,7 +182,7 @@ CkPArdH2\n\
      size_t len = 0;
      SM2_KEY  key;
 
-     if (pem_str_read(str, strlen(str), "EC PRIVATE KEY", buf, &len) != 0){
+     if (pem_read_str(str, strlen(str), "EC PRIVATE KEY", buf, &len) != 0){
          error_puts("无法解析PEM");
          return;
      }

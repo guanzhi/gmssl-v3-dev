@@ -26,8 +26,8 @@ int main(int argc, char **argv) {
 
     X509_CERTIFICATE a;
     memset(buf,0, 1024);
-    ret = pem_str_read(str, strlen(str), "CERTIFICATE", buf, &len);
-    if (ret != 0){
+    ret = pem_read_str(str, strlen(str), "CERTIFICATE", buf, &len);
+    if (ret != 1){
         error_print();
         return -1;
     }

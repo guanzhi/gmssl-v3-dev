@@ -777,12 +777,14 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 		tls_record_print(stderr, record, recordlen, 0, 0);
 		if (tls_record_get_handshake_certificate(record,
 			conn->client_certs, &conn->client_certs_len) != 1) {
+            tlcp_alert(TLS_alert_bad_certificate, conn->sock);
 			error_print();
 			return -1;
 		}
 		// FIXME: verify client's certificate with ca certs		
 		if (tls_certificate_get_public_keys(conn->client_certs, conn->client_certs_len,
 			&client_sign_key, NULL) != 1) {
+            tlcp_alert(TLS_alert_bad_certificate, conn->sock);
 			error_print();
 			return -1;
 		}
