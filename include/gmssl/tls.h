@@ -316,36 +316,36 @@ typedef enum {
 } TLS_ALERT_LEVEL;
 
 typedef enum {
-	TLS_alert_close_notify		= 0,
-	TLS_alert_unexpected_message	= 10,
-	TLS_alert_bad_record_mac	= 20,
-	TLS_alert_decryption_failed	= 21,
-	TLS_alert_record_overflow	= 22,
-	TLS_alert_decompression_failure	= 30,
-	TLS_alert_handshake_failure	= 40,
-	TLS_alert_no_certificate	= 41,
-	TLS_alert_bad_certificate	= 42,
-	TLS_alert_unsupported_certificate = 43,
-	TLS_alert_certificate_revoked	= 44,
-	TLS_alert_certificate_expired	= 45,
-	TLS_alert_certificate_unknown	= 46,
-	TLS_alert_illegal_parameter	= 47,
-	TLS_alert_unknown_ca		= 48,
-	TLS_alert_access_denied		= 49,
-	TLS_alert_decode_error		= 50,
-	TLS_alert_decrypt_error		= 51,
-	TLS_alert_export_restriction	= 60,
-	TLS_alert_protocol_version	= 70,
-	TLS_alert_insufficient_security	= 71,
-	TLS_alert_internal_error	= 80,
-	TLS_alert_user_canceled		= 90,
-	TLS_alert_no_renegotiation	= 100,
-	TLS_alert_unsupported_site2site	= 200,
-	TLS_alert_no_area		= 201,
-	TLS_alert_unsupported_areatype	= 202,
-	TLS_alert_bad_ibcparam		= 203,
-	TLS_alert_unsupported_ibcparam	= 204,
-	TLS_alert_identity_need		= 205,
+	TLS_alert_close_notify		        = 0,
+	TLS_alert_unexpected_message	    = 10,
+	TLS_alert_bad_record_mac	        = 20,
+	TLS_alert_decryption_failed	        = 21,
+	TLS_alert_record_overflow	        = 22,
+	TLS_alert_decompression_failure	    = 30,
+	TLS_alert_handshake_failure	        = 40,
+	TLS_alert_no_certificate	        = 41,
+	TLS_alert_bad_certificate	        = 42,
+	TLS_alert_unsupported_certificate   = 43,
+	TLS_alert_certificate_revoked	    = 44,
+	TLS_alert_certificate_expired	    = 45,
+	TLS_alert_certificate_unknown	    = 46,
+	TLS_alert_illegal_parameter	        = 47,
+	TLS_alert_unknown_ca		        = 48,
+	TLS_alert_access_denied		        = 49,
+	TLS_alert_decode_error		        = 50,
+	TLS_alert_decrypt_error		        = 51,
+	TLS_alert_export_restriction	    = 60,
+	TLS_alert_protocol_version	        = 70,
+	TLS_alert_insufficient_security	    = 71,
+	TLS_alert_internal_error	        = 80,
+	TLS_alert_user_canceled		        = 90,
+	TLS_alert_no_renegotiation	        = 100,
+	TLS_alert_unsupported_site2site	    = 200,
+	TLS_alert_no_area		            = 201,
+	TLS_alert_unsupported_areatype	    = 202,
+	TLS_alert_bad_ibcparam		        = 203,
+	TLS_alert_unsupported_ibcparam	    = 204,
+	TLS_alert_identity_need		        = 205,
 } TLS_ALERT_DESCRIPTION;
 
 
@@ -614,6 +614,13 @@ int tls_record_set_alert(uint8_t *record, size_t *recordlen,
 int tls_record_get_alert(const uint8_t *record,
 	int *alert_level,
 	int *alert_description);
+/**
+ * 发送TLCP alert消息
+ * @param alert_description 错误报警描述
+ * @param sock socket连接
+ * @return 发送结果，1 成功，-1 失败。
+ */
+int tlcp_alert(int alert_description, int sock);
 
 const char *tls_change_cipher_spec_text(int change_cipher_spec);
 int tls_record_set_change_cipher_spec(uint8_t *record, size_t *recordlen);

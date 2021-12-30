@@ -776,13 +776,14 @@ int tls_record_get_handshake_client_hello(const uint8_t *record,
 		uint16_t cipher_suite;
 		tls_uint16_from_bytes(&cipher_suite, &ciphers, &ciphers_len);
 		if (!tls_cipher_suite_name(cipher_suite)) {
-			error_print();
-			return -1;
+			// error_print();
+			// return -1;
+            continue;
 		}
 		*cipher_suites++ = cipher_suite;
 		(*cipher_suites_count)++;
 	}
-	if (len > 0) {
+	if (len > 0 && exts != NULL) {
 		if (*version < TLS_version_tls12) {
 			error_print();
 			return -1;

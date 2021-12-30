@@ -592,7 +592,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 		return -1;
 	}
 
-	error_puts("start listen ...");
+    error_print_msg("start listen port %d...", port);
 	listen(sock, 5);
 
 	memset(conn, 0, sizeof(*conn));
@@ -614,6 +614,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 	tls_trace("<<<< ClientHello\n");
 	if (tls_record_recv(record, &recordlen, conn->sock) != 1
 		|| tls_record_version(record) != TLS_version_tlcp) {
+        tlcp_alert(TLS_alert_protocol_version, conn->sock);
 		error_print();
 		return -1;
 	}
@@ -621,10 +622,12 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 	if (tls_record_get_handshake_client_hello(record,
 		&conn->version, client_random, session_id, &session_id_len,
 		client_ciphers, &client_ciphers_count, NULL, 0) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
 	if (conn->version != TLS_version_tlcp) {
+        tlcp_alert(TLS_alert_protocol_version, conn->sock);
 		error_print();
 		return -1;
 	}
@@ -635,6 +638,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 		}
 	}
 	if (conn->cipher_suite == 0) {
+        tlcp_alert(TLS_alert_handshake_failure, conn->sock);
 		error_puts("no common cipher_suite");
 		return -1;
 	}
@@ -650,6 +654,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 	if (tls_record_set_handshake_server_hello(record, &recordlen,
 		TLS_version_tlcp, server_random, NULL, 0,
 		conn->cipher_suite, NULL, 0) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
@@ -667,6 +672,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 
 	tls_trace(">>>> ServerCertificate\n");
 	if (tls_record_set_handshake_certificate_from_pem(record, &recordlen, certs_fp) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
@@ -698,6 +704,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 		return -1;
 	}
 	if (tlcp_record_set_handshake_server_key_exchange_pke(record, &recordlen, sig, siglen) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
@@ -722,6 +729,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 		if (tls_record_set_handshake_certificate_request(record, &recordlen,
 			cert_types, cert_types_count,
 			ca_names, ca_names_len) != 1) {
+            tlcp_alert(TLS_alert_internal_error, conn->sock);
 			error_print();
 			return -1;
 		}
@@ -741,6 +749,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 
 	tls_trace(">>>> ServerHelloDone\n");
 	if (tls_record_set_handshake_server_hello_done(record, &recordlen) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
@@ -760,6 +769,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 		tls_trace("<<<< ClientCertificate\n");
 		if (tls_record_recv(record, &recordlen, conn->sock) != 1
 			|| tls_record_version(record) != TLS_version_tlcp) {
+            tlcp_alert(TLS_alert_internal_error, conn->sock);
 			error_print();
 			return -1;
 		}
@@ -829,12 +839,14 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 	if (tls_prf(pre_master_secret, 48, "master secret",
 		client_random, 32, server_random, 32,
 		48, conn->master_secret) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
 	if (tls_prf(conn->master_secret, 48, "key expansion",
 		server_random, 32, client_random, 32,
 		96, conn->key_block) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
@@ -909,10 +921,12 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 	sm3_finish(&sm3_ctx, sm3_hash);
 	if (tls_prf(conn->master_secret, 48, "server finished", sm3_hash, 32, NULL, 0,
 		12, verify_data) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
 	if (tls_record_set_handshake_finished(finished, &finishedlen, verify_data) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
 		error_print();
 		return -1;
 	}
@@ -930,4 +944,55 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 
 	tls_trace("Connection Established!\n\n");
 	return 1;
+}
+
+int tlcp_alert(int alert_description, int sock)
+{
+    uint8_t record[8];
+    size_t len;
+    int alert_level;
+    switch (alert_description) {
+        case TLS_alert_user_canceled:
+            alert_level = TLS_alert_level_warning;
+            break;
+        case TLS_alert_close_notify:
+        case TLS_alert_unexpected_message:
+        case TLS_alert_bad_record_mac:
+        case TLS_alert_decryption_failed:
+        case TLS_alert_record_overflow:
+        case TLS_alert_decompression_failure:
+        case TLS_alert_handshake_failure:
+        case TLS_alert_no_certificate:
+        case TLS_alert_bad_certificate:
+        case TLS_alert_unsupported_certificate:
+        case TLS_alert_certificate_revoked:
+        case TLS_alert_certificate_expired:
+        case TLS_alert_certificate_unknown:
+        case TLS_alert_illegal_parameter:
+        case TLS_alert_unknown_ca:
+        case TLS_alert_access_denied:
+        case TLS_alert_decode_error:
+        case TLS_alert_decrypt_error:
+        case TLS_alert_export_restriction:
+        case TLS_alert_protocol_version:
+        case TLS_alert_insufficient_security:
+        case TLS_alert_internal_error:
+        case TLS_alert_no_renegotiation:
+        case TLS_alert_unsupported_site2site:
+        case TLS_alert_no_area:
+        case TLS_alert_unsupported_areatype:
+        case TLS_alert_bad_ibcparam:
+        case TLS_alert_unsupported_ibcparam:
+        case TLS_alert_identity_need:
+        default:
+            alert_level = TLS_alert_level_fatal;
+            break;
+    }
+    record[1] = TLCP_VERSION_MAJOR;
+    record[2] = TLCP_VERSION_MINOR;
+    // 设置消息
+    if (tls_record_set_alert(record, &len, alert_level, alert_description) != 1){
+        return -1;
+    }
+    return tls_record_send(record, len, sock);
 }
