@@ -86,7 +86,8 @@ int tlcp_record_set_handshake_server_key_exchange_pke(uint8_t *record, size_t *r
 		error_print();
 		return -1;
 	}
-	tls_array_to_bytes(sig, siglen, &p, &hslen);
+    // signed_param 为一个向量 16bit的向量
+    tls_uint16array_to_bytes(sig, siglen, &p, &hslen);
 	tls_record_set_handshake(record, recordlen, type, NULL, hslen);
 	return 1;
 }
