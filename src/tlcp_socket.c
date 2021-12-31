@@ -48,7 +48,6 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <gmssl/tlcp_socket.h>
@@ -56,23 +55,8 @@
 #include <gmssl/rand.h>
 #include <gmssl/error.h>
 
-/**
- * 生成TLCP格式的随机数
- * @param rand 随机源
- * @param random 随机数
- * @return 1
- */
-static int tlcp_random_generate(TLCP_SOCKET_RandBytes_FuncPtr rand, uint8_t random[32]) {
-    uint32_t gmt_unix_time = (uint32_t) time(NULL);
-    uint8_t *p = random;
-    size_t len = 0;
-    tls_uint32_to_bytes(gmt_unix_time, &p, &len);
-    rand(random + 4, 28);
-    return 1;
-}
 
-
-int TLCP_listen(TLCP_SOCKET_CTX *ctx, int port) {
+int TLCP_SOCKET_Listen(TLCP_SOCKET_CTX *ctx, int port) {
     struct sockaddr_in server_addr;
     int sock;
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -87,11 +71,11 @@ int TLCP_listen(TLCP_SOCKET_CTX *ctx, int port) {
         error_print();
         return -1;
     }
-    error_print_msg(">> start listen port %d", port);
-    return TLCP_listen_raw(ctx, sock);
+    error_print_msg("TLCP Socket listen in port %d\n", port);
+    return TLCP_SOCKET_Listen_raw(ctx, sock);
 }
 
-int TLCP_listen_raw(TLCP_SOCKET_CTX *ctx, int fd) {
+int TLCP_SOCKET_Listen_raw(TLCP_SOCKET_CTX *ctx, int fd) {
     if (ctx == NULL) {
         error_print();
         return -1;
@@ -115,7 +99,7 @@ int TLCP_listen_raw(TLCP_SOCKET_CTX *ctx, int fd) {
     return 1;
 }
 
-void TLCP_close(TLCP_SOCKET_CTX *ctx) {
+void TLCP_SOCKET_Close(TLCP_SOCKET_CTX *ctx) {
     if (ctx != NULL && ctx->_sock != 0) {
         close(ctx->_sock);
     }
@@ -130,7 +114,7 @@ void TLCP_close(TLCP_SOCKET_CTX *ctx) {
  * @param conn [out] 连接对象
  * @return 1 - 连接成功; -1 - 连接失败
  */
-int TLCP_accept(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn) {
+int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn) {
     size_t handshakes_buflen = 4096;
     uint8_t handshakes_buf[handshakes_buflen];
     uint8_t *handshakes = handshakes_buf;
@@ -177,22 +161,22 @@ int TLCP_accept(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn) {
 
     sm3_init(&sm3_ctx);
     tls_trace("<<<< ClientHello\n");
-    if (read_client_hello(ctx, conn, record, &recordlen, client_random) != 1) {
+    if (tlcp_socket_read_client_hello(ctx, conn, record, &recordlen, client_random) != 1) {
         return -1;
     }
-    update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
+    tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
     tls_trace(">>>> ServerHello\n");
-    if (write_server_hello(ctx, conn, record, &recordlen, server_random) != 1) {
+    if (tlcp_socket_write_server_hello(ctx, conn, record, &recordlen, server_random) != 1) {
         return -1;
     }
-    update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
+    tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
     tls_trace(">>>> ServerCertificate\n");
-    if (write_server_certificate(ctx, conn, record, &recordlen, server_enc_cert, &server_enc_certlen) != 1) {
+    if (tlcp_socket_write_server_certificate(ctx, conn, record, &recordlen, server_enc_cert, &server_enc_certlen) != 1) {
         return -1;
     }
-    update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
+    tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
     return 1;
 }
@@ -205,7 +189,7 @@ int TLCP_accept(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn) {
  * @param len  [out] 读取数据长度
  * @return 1 - 读取成功；-1 - 读取失败
  */
-int TLCP_read(TLS_CONNECT *conn, uint8_t *buf, size_t *len);
+int TLCP_SOCKET_Read(TLS_CONNECT *conn, uint8_t *buf, size_t *len);
 
 /**
  * 向TLCP连接中加密验证写入数据
@@ -215,7 +199,7 @@ int TLCP_read(TLS_CONNECT *conn, uint8_t *buf, size_t *len);
  * @param datalen  [in] 读取数据长度
  * @return 1 - 写入成功；-1 - 写入失败
  */
-int TLCP_write(TLS_CONNECT *conn, uint8_t *data, size_t datalen);
+int TLCP_SOCKET_Write(TLS_CONNECT *conn, uint8_t *data, size_t datalen);
 
 /**
  * 连接TLCP服务端
@@ -224,14 +208,14 @@ int TLCP_write(TLS_CONNECT *conn, uint8_t *data, size_t datalen);
  * @param conn [out] TLCP连接
  * @return 1 - 连接成功；-1 - 连接失败
  */
-int TLCP_connect(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn);
+int TLCP_SOCKET_Connect(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn);
 
 /**
  * 断开TLCP连接
  *
  * @param conn [in] 连接
  */
-void TLCP_connect_close(TLS_CONNECT *conn) {
+void TLCP_SOCKET_Connect_Close(TLS_CONNECT *conn) {
     if (conn != NULL) {
         close(conn->sock);
     }

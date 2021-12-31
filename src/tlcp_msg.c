@@ -47,6 +47,7 @@
  */
 
 #include <gmssl/tlcp_socket.h>
+#include <gmssl/tlcp_msg.h>
 #include <gmssl/rand.h>
 #include <gmssl/error.h>
 
@@ -54,9 +55,9 @@
 static const int    tlcp_ciphers[]     = {TLCP_cipher_ecc_sm4_cbc_sm3};
 static const size_t tlcp_ciphers_count = sizeof(tlcp_ciphers) / sizeof(tlcp_ciphers[0]);
 
-int update_record_hash(SM3_CTX *sm3_ctx,
-                       uint8_t *record, size_t recordlen,
-                       uint8_t **handshakes, size_t *handshakeslen) {
+int tlcp_socket_update_record_hash(SM3_CTX *sm3_ctx,
+                                   uint8_t *record, size_t recordlen,
+                                   uint8_t **handshakes, size_t *handshakeslen) {
     sm3_update(sm3_ctx, record + 5, recordlen - 5);
     if (handshakes) {
         memcpy(*handshakes, record + 5, recordlen - 5);
@@ -65,8 +66,8 @@ int update_record_hash(SM3_CTX *sm3_ctx,
     }
 }
 
-int read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                      uint8_t *record, size_t *recordlen, uint8_t *client_random) {
+int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
+                                  uint8_t *record, size_t *recordlen, uint8_t *client_random) {
     size_t i                    = 0;
     int    client_ciphers[12]   = {0};
     size_t client_ciphers_count = sizeof(client_ciphers) / sizeof(client_ciphers[0]);
@@ -107,12 +108,12 @@ int read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
     return 1;
 }
 
-int write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                       uint8_t *record, size_t *recordlen, uint8_t *server_random) {
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
+                                   uint8_t *record, size_t *recordlen, uint8_t *server_random) {
     // 生成客户端随机数
-    tls_random_generate(server_random);
+    tlcp_socket_random_generate(ctx, server_random);
     // 随机产生一个会话ID
-    tls_random_generate(conn->session_id);
+    tlcp_socket_random_generate(ctx,conn->session_id);
     conn->session_id_len = 32;
     if (tls_record_set_handshake_server_hello(record, recordlen,
                                               TLS_version_tlcp,
@@ -129,9 +130,9 @@ int write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
     return 1;
 }
 
-int write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                             uint8_t *record, size_t *recordlen,
-                             uint8_t *server_enc_cert, size_t *server_enc_certlen) {
+int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
+                                         uint8_t *record, size_t *recordlen,
+                                         uint8_t *server_enc_cert, size_t *server_enc_certlen) {
 
     int     type     = TLS_handshake_certificate;
     uint8_t *data    = record + 5 + 4;
@@ -140,7 +141,7 @@ int write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
     size_t  certslen = 0;
     uint8_t der[1024];
     uint8_t *cp      = der;
-    size_t  derlen;
+    size_t  derlen = 0;
 
     // 序列化签名证书DER
     if (x509_certificate_to_der(ctx->server_sig_key->cert, &cp, &derlen) != 1) {
@@ -163,7 +164,6 @@ int write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
     *server_enc_certlen = derlen;
     tls_uint24array_to_bytes(der, derlen, &certs, &certslen);
 
-
     datalen = certslen;
     tls_uint24_to_bytes((uint24_t) certslen, &data, &datalen);
     tls_record_set_handshake(record, recordlen, type, NULL, datalen);
@@ -173,4 +173,16 @@ int write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
     }
 
     return 1;
+}
+
+int tlcp_socket_random_generate(TLCP_SOCKET_CTX *ctx, uint8_t random[32]) {
+    uint32_t gmt_unix_time = (uint32_t) time(NULL);
+    uint8_t  *p            = random;
+    size_t   len           = 0;
+    tls_uint32_to_bytes(gmt_unix_time, &p, &len);
+    if (ctx->rand != NULL) {
+        return ctx->rand(random + 4, 28);
+    } else {
+        return rand_bytes(random + 4, 28);
+    }
 }

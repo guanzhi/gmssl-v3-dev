@@ -64,9 +64,9 @@
  * @param handshakeslen [in,out] 记录层消息长度
  * @return 1 - 成功；-1 - 失败
  */
-int update_record_hash(SM3_CTX *sm3_ctx,
-                       uint8_t *record, size_t recordlen,
-                       uint8_t **handshakes, size_t *handshakeslen);
+int tlcp_socket_update_record_hash(SM3_CTX *sm3_ctx,
+                                   uint8_t *record, size_t recordlen,
+                                   uint8_t **handshakes, size_t *handshakeslen);
 
 /**
  * 读取并处理客户端Hello消息
@@ -78,8 +78,8 @@ int update_record_hash(SM3_CTX *sm3_ctx,
  * @param client_random [in] 客户端随机数
  * @return 1 - 成功；-1 - 失败
  */
-int read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                      uint8_t *record, size_t *recordlen, uint8_t *client_random);
+int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
+                                  uint8_t *record, size_t *recordlen, uint8_t *client_random);
 
 /**
  * 写入服务端Hello消息
@@ -91,8 +91,8 @@ int read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
  * @param server_random [in] 服务端随机数
  * @return 1 - 成功；-1 - 失败
  */
-int write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                       uint8_t *record, size_t *recordlen, uint8_t *server_random);
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
+                                   uint8_t *record, size_t *recordlen, uint8_t *server_random);
 
 /**
  * 写入服务端证书消息
@@ -105,8 +105,15 @@ int write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
  * @param server_enc_certlen        [out] 加密证书DER长度
  * @return 1 - 成功；-1 - 失败
  */
-int write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                             uint8_t *record, size_t *recordlen,
-                             uint8_t *server_enc_cert, size_t *server_enc_certlen);
+int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
+                                         uint8_t *record, size_t *recordlen,
+                                         uint8_t *server_enc_cert, size_t *server_enc_certlen);
+/**
+ * 生成TLCP随机数
+ * @param ctx TLCP上下文
+ * @param random 随机数
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_random_generate(TLCP_SOCKET_CTX *ctx, uint8_t random[32]);
 
 #endif //GMSSL_TLCP_MSG_H

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <gmssl/error.h>
 #include <gmssl/tlcp_socket.h>
+#include <gmssl/rand.h>
 
 static uint8_t cacert_str[] = "-----BEGIN CERTIFICATE-----\n\
 MIIB3jCCAYOgAwIBAgIIAs4MAPwpIBcwCgYIKoEcz1UBg3UwQjELMAkGA1UEBhMC\n\
@@ -67,16 +68,43 @@ static X509_CERTIFICATE enccert;
 static SM2_KEY          sigkey;
 static SM2_KEY          enckey;
 
-static int load();
+static int load_cert_keys();
 
 int main(void) {
-    if (load() != 1) {
+    TLCP_SOCKET_CTX ctx;
+    TLCP_SOCKET_KEY socket_sigkey;
+    TLCP_SOCKET_KEY socket_enckey;
+    TLS_CONNECT conn;
+    // 加载证书和相关密钥
+    if (load_cert_keys() != 1) {
         return -1;
     }
-
+    // 创建SOCKET使用的密钥对
+    if (TLCP_SOCKET_gmssl_key(&socket_sigkey, &sigcert, &sigkey) != 1){
+        return -1;
+    }
+    if (TLCP_SOCKET_gmssl_key(&socket_enckey, &enccert, &enckey) != 1){
+        return -1;
+    }
+    // 初始化上下文
+    ctx.rand = rand_bytes;
+    ctx.server_sig_key = &socket_sigkey;
+    ctx.server_enc_key = &socket_enckey;
+    // 打开端口监听TLCP连接
+    if (TLCP_SOCKET_Listen(&ctx, 30443) != 1){
+        return -1;
+    }
+    for(;;){
+        if (TLCP_SOCKET_Accept(&ctx, &conn) != 1){
+            error_print();
+            break;
+        }
+    }
+    // 关闭连接
+    TLCP_SOCKET_Close(&ctx);
 }
 
-static int load() {
+static int load_cert_keys() {
     if (x509_certificate_from_bytes(&cacert, cacert_str, strlen(cacert_str)) != 1) {
         error_print();
         return -1;
@@ -89,7 +117,6 @@ static int load() {
         error_print();
         return -1;
     }
-
     if (sm2_private_key_from_str_pem(&sigkey, sigkey_str, strlen(sigkey_str)) != 1) {
         error_print();
         return -1;
