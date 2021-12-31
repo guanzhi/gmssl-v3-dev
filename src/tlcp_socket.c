@@ -140,7 +140,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
 
     // 开始握手协议
     sm3_init(&sm3_ctx);
-    conn->sm3_ctx = &sm3_ctx;
+    conn->_sm3_ctx = &sm3_ctx;
 
     tls_trace("<<<< ClientHello\n");
     if (tlcp_socket_read_client_hello(conn, record, &recordlen) != 1) {
@@ -191,7 +191,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
         return -1;
     }
 
-    conn->sm3_ctx = NULL;
+    conn->_sm3_ctx = NULL;
     return 1;
 }
 

@@ -171,7 +171,7 @@ typedef struct {
     uint8_t      *client_write_IV;          // 客户端写IV
     uint8_t      *server_write_IV;          // 服务端写IV
 
-    SM3_CTX *sm3_ctx; // 用于握手阶段的校验码计算，握手结束后置为NULL
+    SM3_CTX *_sm3_ctx; // 用于握手阶段的校验码计算，握手结束后置为NULL
 }           TLCP_SOCKET_CONNECT;
 
 /**

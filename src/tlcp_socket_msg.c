@@ -69,7 +69,7 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn,
         error_print();
         return -1;
     }
-    sm3_update(conn->sm3_ctx, record + 5, *recordlen - 5);
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     if (tls_record_get_handshake_client_hello(record, &conn->version, conn->client_random,
                                               conn->session_id, &conn->session_id_len,
                                               client_ciphers, &client_ciphers_count,
@@ -128,7 +128,7 @@ int tlcp_socket_write_server_hello(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_RandBy
         error_print();
         return -1;
     }
-    sm3_update(conn->sm3_ctx, record + 5, *recordlen - 5);
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     return 1;
 }
 
@@ -172,7 +172,7 @@ int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
         error_print();
         return -1;
     }
-    sm3_update(conn->sm3_ctx, record + 5, *recordlen - 5);
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     return 1;
 }
 
@@ -225,7 +225,7 @@ int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET
         error_print();
         return -1;
     }
-    sm3_update(conn->sm3_ctx, record + 5, *recordlen - 5);
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     return 1;
 }
 
@@ -239,7 +239,7 @@ int tlcp_socket_write_server_hello_done(TLCP_SOCKET_CONNECT *conn, uint8_t *reco
         error_print();
         return -1;
     }
-    sm3_update(conn->sm3_ctx, record + 5, *recordlen - 5);
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     return 1;
 }
 
@@ -258,7 +258,7 @@ int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_
         error_print();
         return -1;
     }
-    sm3_update(conn->sm3_ctx, record + 5, *recordlen - 5);
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     if (tls_record_get_handshake_client_key_exchange_pke(record, enced_pms, &enced_pms_len) != 1) {
         error_print();
         return -1;
@@ -353,7 +353,7 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
         return -1;
     }
 
-    memcpy(&tmp_sm3_ctx, conn->sm3_ctx, sizeof(SM3_CTX));
+    memcpy(&tmp_sm3_ctx, conn->_sm3_ctx, sizeof(SM3_CTX));
     sm3_finish(&tmp_sm3_ctx, sm3_hash);
 
     // 计算校验数据 PRF(master_secret, finished_label, SM3(handshake_messages))[0..11]
@@ -363,7 +363,7 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
         error_print();
         return -1;
     }
-    sm3_update(conn->sm3_ctx, finished + 5, finishedlen - 5);
+    sm3_update(conn->_sm3_ctx, finished + 5, finishedlen - 5);
 
     // 比较数据校验码是否一致
     if (memcmp(local_verify_data, verify_data, 12) != 0) {
