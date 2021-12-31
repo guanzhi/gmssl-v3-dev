@@ -74,7 +74,7 @@ int main(void) {
     TLCP_SOCKET_CTX ctx;
     TLCP_SOCKET_KEY socket_sigkey;
     TLCP_SOCKET_KEY socket_enckey;
-    TLS_CONNECT conn;
+    TLCP_SOCKET_CONNECT conn;
     // 加载证书和相关密钥
     if (load_cert_keys() != 1) {
         return -1;

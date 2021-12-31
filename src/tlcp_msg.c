@@ -66,8 +66,8 @@ int tlcp_socket_update_record_hash(SM3_CTX *sm3_ctx,
     }
 }
 
-int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                                  uint8_t *record, size_t *recordlen, uint8_t *client_random) {
+int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                  uint8_t *record, size_t *recordlen) {
     size_t i                    = 0;
     int    client_ciphers[12]   = {0};
     size_t client_ciphers_count = sizeof(client_ciphers) / sizeof(client_ciphers[0]);
@@ -80,7 +80,7 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
         return -1;
     }
 
-    if (tls_record_get_handshake_client_hello(record, &conn->version, client_random,
+    if (tls_record_get_handshake_client_hello(record, &conn->version, conn->client_random,
                                               conn->session_id, &conn->session_id_len,
                                               client_ciphers, &client_ciphers_count,
                                               NULL, 0) != 1) {
@@ -105,19 +105,30 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
         error_puts("no common cipher_suite");
         return -1;
     }
+
+    conn->entity = TLCP_SOCKET_SERVER_END;
+    // 根据算法套件设置密钥长度
+    switch (conn->cipher_suite) {
+        case TLCP_cipher_ecc_sm4_cbc_sm3:
+        default:
+            conn->hash_size           = SM3_DIGEST_SIZE;
+            conn->key_material_length = SM4_BLOCK_SIZE;
+            conn->fixed_iv_length     = SM3_HMAC_SIZE;
+            break;
+    }
     return 1;
 }
 
-int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                                   uint8_t *record, size_t *recordlen, uint8_t *server_random) {
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                   uint8_t *record, size_t *recordlen) {
     // 生成客户端随机数
-    tlcp_socket_random_generate(ctx, server_random);
+    tlcp_socket_random_generate(ctx, conn->server_random);
     // 随机产生一个会话ID
-    tlcp_socket_random_generate(ctx,conn->session_id);
+    tlcp_socket_random_generate(ctx, conn->session_id);
     conn->session_id_len = 32;
     if (tls_record_set_handshake_server_hello(record, recordlen,
-                                              TLS_version_tlcp,
-                                              server_random, conn->session_id, conn->session_id_len,
+                                              TLS_version_tlcp, conn->server_random,
+                                              conn->session_id, conn->session_id_len,
                                               conn->cipher_suite, NULL, 0) != 1) {
         tlcp_alert(TLS_alert_internal_error, conn->sock);
         error_print();
@@ -130,7 +141,7 @@ int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
     return 1;
 }
 
-int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
+int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                          uint8_t *record, size_t *recordlen,
                                          uint8_t *server_enc_cert, size_t *server_enc_certlen) {
 
@@ -141,7 +152,7 @@ int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn
     size_t  certslen = 0;
     uint8_t der[1024];
     uint8_t *cp      = der;
-    size_t  derlen = 0;
+    size_t  derlen   = 0;
 
     // 序列化签名证书DER
     if (x509_certificate_to_der(ctx->server_sig_key->cert, &cp, &derlen) != 1) {
@@ -149,7 +160,6 @@ int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn
         error_print();
         return -1;
     }
-    memcpy(conn->server_certs, der, derlen);
     tls_uint24array_to_bytes(der, derlen, &certs, &certslen);
 
     // 序列化加密证书DER
@@ -185,4 +195,44 @@ int tlcp_socket_random_generate(TLCP_SOCKET_CTX *ctx, uint8_t random[32]) {
     } else {
         return rand_bytes(random + 4, 28);
     }
+}
+
+
+int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                          uint8_t *record, size_t *recordlen,
+                                          uint8_t *server_enc_cert, size_t server_enc_certlen) {
+
+    uint8_t sig[TLS_MAX_SIGNATURE_SIZE];
+    size_t  siglen = sizeof(sig);
+    uint8_t tbs[TLS_MAX_CERTIFICATES_SIZE + 64];
+    size_t  len    = 0;
+    uint8_t *p     = tbs;
+    TLCP_SOCKET_KEY *key = ctx->server_sig_key;
+    /*
+     * 当密钥交换方式为ECC时，signed_params是服务端对双方随机数和服务端证书的签名
+     *
+     * digitally-signed struct{
+     *      opaque client_random[32];
+     *      opaque server_random[32];
+     *      opaque ASN1.1Cert<1..2^24-1>;
+     * }signed_params;
+     */
+    tls_array_to_bytes(conn->client_random, 32, &p, &len);
+    tls_array_to_bytes(conn->server_random, 32, &p, &len);
+    tls_uint24array_to_bytes(server_enc_cert, server_enc_certlen, &p, &len);
+
+    if (key->signer(key->ctx, tbs, len, sig, &siglen) != 1) {
+        error_print();
+        return -1;
+    }
+    if (tlcp_record_set_handshake_server_key_exchange_pke(record, recordlen, sig, siglen) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        error_print();
+        return -1;
+    }
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    return 1;
 }

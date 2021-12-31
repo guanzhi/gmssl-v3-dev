@@ -75,11 +75,9 @@ int tlcp_socket_update_record_hash(SM3_CTX *sm3_ctx,
  * @param conn          [in,out]连接对象
  * @param record        [in] 收到的记录层数据
  * @param recordlen     [in] 记录层数据
- * @param client_random [in] 客户端随机数
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                                  uint8_t *record, size_t *recordlen, uint8_t *client_random);
+int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
 /**
  * 写入服务端Hello消息
@@ -88,11 +86,9 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
  * @param conn          [in,out] 连接对象
  * @param record        [in] 收到的记录层数据
  * @param recordlen     [in] 记录层数据
- * @param server_random [in] 服务端随机数
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
-                                   uint8_t *record, size_t *recordlen, uint8_t *server_random);
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
 /**
  * 写入服务端证书消息
@@ -105,15 +101,32 @@ int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
  * @param server_enc_certlen        [out] 加密证书DER长度
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn,
+int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                          uint8_t *record, size_t *recordlen,
                                          uint8_t *server_enc_cert, size_t *server_enc_certlen);
+
 /**
  * 生成TLCP随机数
- * @param ctx TLCP上下文
- * @param random 随机数
+ *
+ * @param ctx       [in] TLCP上下文
+ * @param random    [out] 随机数
  * @return 1 - 成功；-1 - 失败
  */
 int tlcp_socket_random_generate(TLCP_SOCKET_CTX *ctx, uint8_t random[32]);
+
+
+/**
+ * 写入服务端密钥交换消息
+ * @param ctx [in] TLCP上下文
+ * @param conn [in] 连接上下文
+ * @param record                    [in] 收到的记录层数据
+ * @param recordlen                 [in] 记录层数据
+ * @param server_enc_cert           [in] 加密证书DER
+ * @param server_enc_certlen        [in] 加密证书DER长度
+ * @return
+ */
+int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                          uint8_t *record, size_t *recordlen,
+                                          uint8_t *server_enc_cert, size_t server_enc_certlen);
 
 #endif //GMSSL_TLCP_MSG_H

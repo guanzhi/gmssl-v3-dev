@@ -91,7 +91,6 @@ int TLCP_SOCKET_gmssl_key(TLCP_SOCKET_KEY *socket_key, X509_CERTIFICATE *cert, S
 
 static int gmssl_sm2_signer(void *ctx, uint8_t *msg, size_t msglen, uint8_t *sig, size_t *siglen) {
     SM2_SIGN_CTX sign_ctx;
-    memset(&sign_ctx, 0, sizeof(SM2_SIGN_CTX));
     if (sm2_sign_init(&sign_ctx, (SM2_KEY *) ctx, SM2_DEFAULT_ID) != 1) {
         error_print();
         return -1;

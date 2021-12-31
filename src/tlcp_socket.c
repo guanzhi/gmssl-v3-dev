@@ -58,14 +58,14 @@
 
 int TLCP_SOCKET_Listen(TLCP_SOCKET_CTX *ctx, int port) {
     struct sockaddr_in server_addr;
-    int sock;
+    int                sock;
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         error_print();
         return -1;
     }
-    server_addr.sin_family = AF_INET;
+    server_addr.sin_family      = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(port);
+    server_addr.sin_port        = htons(port);
     // 绑定端口，任意来源。
     if (bind(sock, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         error_print();
@@ -114,38 +114,33 @@ void TLCP_SOCKET_Close(TLCP_SOCKET_CTX *ctx) {
  * @param conn [out] 连接对象
  * @return 1 - 连接成功; -1 - 连接失败
  */
-int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn) {
-    size_t handshakes_buflen = 4096;
-    uint8_t handshakes_buf[handshakes_buflen];
-    uint8_t *handshakes = handshakes_buf;
-    size_t handshakeslen = 0;
-    uint8_t record[TLS_MAX_RECORD_SIZE];
-    size_t recordlen;
-    uint8_t finished[256];
-    size_t finishedlen = sizeof(finished);
+int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
+    size_t    handshakes_buflen   = 4096;
+    uint8_t   handshakes_buf[handshakes_buflen];
+    uint8_t   *handshakes         = handshakes_buf;
+    size_t    handshakeslen       = 0;
+    uint8_t   record[TLS_MAX_RECORD_SIZE];
+    size_t    recordlen;
+    uint8_t   finished[256];
+    size_t    finishedlen         = sizeof(finished);
 
-    uint8_t client_random[32];
-    uint8_t server_random[32];
     uint8_t server_enc_cert[TLS_MAX_CERTIFICATES_SIZE];
-    size_t server_enc_certlen;
+    size_t  server_enc_certlen;
 
-    SM2_KEY client_sign_key;
-    SM2_SIGN_CTX sign_ctx;
-    uint8_t sig[TLS_MAX_SIGNATURE_SIZE];
-    size_t siglen = sizeof(sig);
+
     uint8_t enced_pms[256];
-    size_t enced_pms_len = sizeof(enced_pms);
+    size_t  enced_pms_len         = sizeof(enced_pms);
     uint8_t pre_master_secret[48];
-    size_t pre_master_secret_len = 48;
+    size_t  pre_master_secret_len = 48;
     SM3_CTX sm3_ctx;
     SM3_CTX tmp_sm3_ctx;
     uint8_t sm3_hash[32];
     uint8_t verify_data[12];
     uint8_t local_verify_data[12];
-    size_t i;
+    size_t  i;
 
     struct sockaddr_in client_addr;
-    socklen_t client_addrlen = sizeof(client_addr);
+    socklen_t client_addrlen      = sizeof(client_addr);
 
     if (ctx == NULL || conn == NULL) {
         error_print();
@@ -161,19 +156,28 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn) {
 
     sm3_init(&sm3_ctx);
     tls_trace("<<<< ClientHello\n");
-    if (tlcp_socket_read_client_hello(ctx, conn, record, &recordlen, client_random) != 1) {
+    if (tlcp_socket_read_client_hello(ctx, conn, record, &recordlen) != 1) {
         return -1;
     }
     tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
     tls_trace(">>>> ServerHello\n");
-    if (tlcp_socket_write_server_hello(ctx, conn, record, &recordlen, server_random) != 1) {
+    if (tlcp_socket_write_server_hello(ctx, conn, record, &recordlen) != 1) {
         return -1;
     }
     tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
     tls_trace(">>>> ServerCertificate\n");
-    if (tlcp_socket_write_server_certificate(ctx, conn, record, &recordlen, server_enc_cert, &server_enc_certlen) != 1) {
+    if (tlcp_socket_write_server_certificate(ctx, conn, record, &recordlen,
+                                             server_enc_cert, &server_enc_certlen) != 1) {
+        return -1;
+    }
+    tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
+
+    tls_trace(">>>> ServerKeyExchange\n");
+    if (tlcp_socket_write_server_key_exchange(ctx, conn,
+                                              record, &recordlen,
+                                              server_enc_cert, server_enc_certlen) != 1) {
         return -1;
     }
     tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
@@ -189,7 +193,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn) {
  * @param len  [out] 读取数据长度
  * @return 1 - 读取成功；-1 - 读取失败
  */
-int TLCP_SOCKET_Read(TLS_CONNECT *conn, uint8_t *buf, size_t *len);
+int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
 
 /**
  * 向TLCP连接中加密验证写入数据
@@ -199,7 +203,7 @@ int TLCP_SOCKET_Read(TLS_CONNECT *conn, uint8_t *buf, size_t *len);
  * @param datalen  [in] 读取数据长度
  * @return 1 - 写入成功；-1 - 写入失败
  */
-int TLCP_SOCKET_Write(TLS_CONNECT *conn, uint8_t *data, size_t datalen);
+int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen);
 
 /**
  * 连接TLCP服务端
@@ -208,16 +212,18 @@ int TLCP_SOCKET_Write(TLS_CONNECT *conn, uint8_t *data, size_t datalen);
  * @param conn [out] TLCP连接
  * @return 1 - 连接成功；-1 - 连接失败
  */
-int TLCP_SOCKET_Connect(TLCP_SOCKET_CTX *ctx, TLS_CONNECT *conn);
+int TLCP_SOCKET_Connect(TLCP_SOCKET_CONNECT *ctx, TLS_CONNECT *conn);
 
 /**
  * 断开TLCP连接
  *
  * @param conn [in] 连接
  */
-void TLCP_SOCKET_Connect_Close(TLS_CONNECT *conn) {
+void TLCP_SOCKET_Connect_Close(TLCP_SOCKET_CONNECT *conn) {
     if (conn != NULL) {
         close(conn->sock);
+        // 将连接上下文中的工作密钥销毁
+        memset(conn, 0, sizeof(*conn));
     }
 }
 
