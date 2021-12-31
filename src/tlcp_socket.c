@@ -182,6 +182,16 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     }
     tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
+    if (ctx->root_cert_len > 0 && ctx->root_certs != NULL) {
+        // TODO: Certificate Request消息
+    }
+
+    tls_trace(">>>> ServerHelloDone\n");
+    if (tlcp_socket_write_server_hello_done(ctx, conn, record, &recordlen) != 1) {
+        return -1;
+    }
+
+
     return 1;
 }
 

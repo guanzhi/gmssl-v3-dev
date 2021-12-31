@@ -236,3 +236,18 @@ int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
     }
     return 1;
 }
+
+int tlcp_socket_write_server_hello_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                        uint8_t *record, size_t *recordlen){
+    if (tls_record_set_handshake_server_hello_done(record, recordlen) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        error_print();
+        return -1;
+    }
+    // tls_record_print(stderr, record, *recordlen, 0, 0);
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    return 1;
+}
