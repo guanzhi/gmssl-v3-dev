@@ -374,3 +374,51 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
 
     return 1;
 }
+
+
+int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
+    uint8_t sm3_hash[32];
+    uint8_t verify_data[12];
+    uint8_t finished[256];
+    size_t  finishedlen = sizeof(finished);
+
+    tls_trace(">>>> [ChangeCipherSpec]\n");
+    if (tls_record_set_change_cipher_spec(record, recordlen) != 1) {
+        error_print();
+        return -1;
+    }
+
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    // tls_record_print(stderr, record, *recordlen, 0, 0);
+    tls_trace(">>>> ServerFinished\n");
+    sm3_finish(conn->_sm3_ctx, sm3_hash);
+    if (tls_prf(conn->master_secret, 48, "server finished", sm3_hash, 32, NULL, 0,
+                12, verify_data) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        error_print();
+        return -1;
+    }
+    // 创建的缓冲区，需要手动设置协议版本号。
+    finished[1] = record[1];
+    finished[2] = record[2];
+    if (tls_record_set_handshake_finished(finished, &finishedlen, verify_data) != 1) {
+        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        error_print();
+        return -1;
+    }
+    // tls_record_print(stderr, finished, finishedlen, 0, 0);
+    if (tls_record_encrypt(&conn->server_write_mac_ctx, &conn->server_write_enc_key,
+                           conn->server_seq_num, finished, finishedlen, record, recordlen) != 1) {
+        error_print();
+        return -1;
+    }
+    tls_seq_num_incr(conn->server_seq_num);
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    return 1;
+}

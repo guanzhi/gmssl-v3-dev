@@ -145,9 +145,18 @@ int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_
  * @param conn      [in] 连接上下文
  * @param record    [in] 收到的记录层数据
  * @param recordlen [in] 记录层数据
- * @param sm3_ctx   [in] 消息Hash上下文
  * @return 1 - 成功；-1 - 失败
  */
 int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
+
+/**
+ * 写入服务端密钥变更消息和Finished消息
+ *
+ * @param conn      [in] 连接上下文
+ * @param record    [in] 收到的记录层数据
+ * @param recordlen [in] 记录层数据
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
 #endif //GMSSL_TLCP_SOCKET_MSG_H

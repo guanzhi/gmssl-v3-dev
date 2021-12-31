@@ -190,6 +190,10 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     if (tlcp_socket_read_client_spec_finished(conn, record, &recordlen) != 1) {
         return -1;
     }
+    // 服务端变更密码协议，发送finished消息
+    if(tlcp_socket_write_server_spec_finished(conn, record, &recordlen) != 1) {
+        return -1;
+    }
 
     conn->_sm3_ctx = NULL;
     return 1;
