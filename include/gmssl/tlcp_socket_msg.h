@@ -48,47 +48,33 @@
 
 
 
-#ifndef GMSSL_TLCP_MSG_H
-#define GMSSL_TLCP_MSG_H
+#ifndef GMSSL_TLCP_SOCKET_MSG_H
+#define GMSSL_TLCP_SOCKET_MSG_H
 
 #include <gmssl/tlcp_socket.h>
 
 
 /**
- * 更新记录层消息的杂凑值
- *
- * @param sm3_ctx [in] 上下文
- * @param record [in] 记录层数据
- * @param recordlen [in] 记录层数据长度
- * @param handshakes [in,out] 所有记录层消息的偏移指针
- * @param handshakeslen [in,out] 记录层消息长度
- * @return 1 - 成功；-1 - 失败
- */
-int tlcp_socket_update_record_hash(SM3_CTX *sm3_ctx,
-                                   uint8_t *record, size_t recordlen,
-                                   uint8_t **handshakes, size_t *handshakeslen);
-
-/**
  * 读取并处理客户端Hello消息
  *
- * @param ctx           [in] 上下文
  * @param conn          [in,out]连接对象
  * @param record        [in] 收到的记录层数据
  * @param recordlen     [in] 记录层数据
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_read_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
+int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
 /**
  * 写入服务端Hello消息
  *
- * @param ctx           [in] 上下文
  * @param conn          [in,out] 连接对象
+ * @param randFnc       [in] 随机源
  * @param record        [in] 收到的记录层数据
  * @param recordlen     [in] 记录层数据
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_RandBytes_FuncPtr randFnc,
+                                   uint8_t *record, size_t *recordlen);
 
 /**
  * 写入服务端证书消息
@@ -106,38 +92,62 @@ int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
                                          uint8_t *server_enc_cert, size_t *server_enc_certlen);
 
 /**
- * 生成TLCP随机数
+ * 生成TLCP随机数（含有UNIX时间戳）
  *
- * @param ctx       [in] TLCP上下文
+ * @param randFnc   [in] 随机源
  * @param random    [out] 随机数
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_random_generate(TLCP_SOCKET_CTX *ctx, uint8_t random[32]);
+int tlcp_socket_random_generate(TLCP_SOCKET_RandBytes_FuncPtr randFnc, uint8_t random[32]);
 
 
 /**
  * 写入服务端密钥交换消息
- * @param ctx                   [in] TLCP上下文
  * @param conn                  [in] 连接上下文
+ * @param sig_key               [in] 签名密钥对
  * @param record                [in] 收到的记录层数据
  * @param recordlen             [in] 记录层数据
  * @param server_enc_cert       [in] 加密证书DER
  * @param server_enc_certlen    [in] 加密证书DER长度
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_KEY *sig_key,
                                           uint8_t *record, size_t *recordlen,
                                           uint8_t *server_enc_cert, size_t server_enc_certlen);
 
 /**
  * 写入服务端DONE消息
-* @param ctx [in] TLCP上下文
- * @param conn [in] 连接上下文
+ *
+ * @param conn              [in] 连接上下文
+ * @param record            [in] 收到的记录层数据
+ * @param recordlen         [in] 记录层数据
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_write_server_hello_done(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
+
+/**
+ * 读取客户端密钥交换消息
+ *
+ * 解密预主密钥，生成主密钥，派生工作密钥
+ *
+ * @param conn                  [in] 连接上下文
+ * @param enc_key               [in] 加密密钥对
  * @param record                [in] 收到的记录层数据
  * @param recordlen             [in] 记录层数据
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_hello_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                        uint8_t *record, size_t *recordlen);
+int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_KEY *enc_key,
+                                         uint8_t *record, size_t *recordlen);
 
-#endif //GMSSL_TLCP_MSG_H
+/**
+ * 读取客户端密钥变更消息和解密验证Finished消息
+ *
+ * @param conn      [in] 连接上下文
+ * @param record    [in] 收到的记录层数据
+ * @param recordlen [in] 记录层数据
+ * @param sm3_ctx   [in] 消息Hash上下文
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
+
+#endif //GMSSL_TLCP_SOCKET_MSG_H

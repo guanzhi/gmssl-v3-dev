@@ -51,7 +51,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <gmssl/tlcp_socket.h>
-#include <gmssl/tlcp_msg.h>
+#include <gmssl/tlcp_socket_msg.h>
 #include <gmssl/rand.h>
 #include <gmssl/error.h>
 
@@ -115,83 +115,83 @@ void TLCP_SOCKET_Close(TLCP_SOCKET_CTX *ctx) {
  * @return 1 - 连接成功; -1 - 连接失败
  */
 int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
-    size_t    handshakes_buflen   = 4096;
-    uint8_t   handshakes_buf[handshakes_buflen];
-    uint8_t   *handshakes         = handshakes_buf;
-    size_t    handshakeslen       = 0;
-    uint8_t   record[TLS_MAX_RECORD_SIZE];
-    size_t    recordlen;
-    uint8_t   finished[256];
-    size_t    finishedlen         = sizeof(finished);
-
-    uint8_t server_enc_cert[TLS_MAX_CERTIFICATES_SIZE];
-    size_t  server_enc_certlen;
-
-
-    uint8_t enced_pms[256];
-    size_t  enced_pms_len         = sizeof(enced_pms);
-    uint8_t pre_master_secret[48];
-    size_t  pre_master_secret_len = 48;
-    SM3_CTX sm3_ctx;
-    SM3_CTX tmp_sm3_ctx;
-    uint8_t sm3_hash[32];
-    uint8_t verify_data[12];
-    uint8_t local_verify_data[12];
-    size_t  i;
-
+    uint8_t            record[TLS_MAX_RECORD_SIZE];
+    size_t             recordlen;
+    uint8_t            server_enc_cert[TLS_MAX_CERTIFICATES_SIZE];
+    size_t             server_enc_certlen;
+    uint8_t            need_client_auth = 0;
     struct sockaddr_in client_addr;
-    socklen_t client_addrlen      = sizeof(client_addr);
+    socklen_t          client_addrlen   = sizeof(client_addr);
+    SM3_CTX            sm3_ctx; // 握手消息Hash
+
 
     if (ctx == NULL || conn == NULL) {
         error_print();
         return -1;
     }
-
+    need_client_auth = ctx->root_cert_len > 0 && ctx->root_certs != NULL;
     memset(conn, 0, sizeof(*conn));
+
     // 阻塞接收连接
     if ((conn->sock = accept(ctx->_sock, (struct sockaddr *) &client_addr, &client_addrlen)) < 0) {
         error_print();
         return -1;
     }
 
+    // 开始握手协议
     sm3_init(&sm3_ctx);
+    conn->sm3_ctx = &sm3_ctx;
+
     tls_trace("<<<< ClientHello\n");
-    if (tlcp_socket_read_client_hello(ctx, conn, record, &recordlen) != 1) {
+    if (tlcp_socket_read_client_hello(conn, record, &recordlen) != 1) {
         return -1;
     }
-    tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
+
 
     tls_trace(">>>> ServerHello\n");
-    if (tlcp_socket_write_server_hello(ctx, conn, record, &recordlen) != 1) {
+    if (tlcp_socket_write_server_hello(conn, ctx->rand, record, &recordlen) != 1) {
         return -1;
     }
-    tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
     tls_trace(">>>> ServerCertificate\n");
     if (tlcp_socket_write_server_certificate(ctx, conn, record, &recordlen,
                                              server_enc_cert, &server_enc_certlen) != 1) {
         return -1;
     }
-    tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
     tls_trace(">>>> ServerKeyExchange\n");
-    if (tlcp_socket_write_server_key_exchange(ctx, conn,
+    if (tlcp_socket_write_server_key_exchange(conn, ctx->server_sig_key,
                                               record, &recordlen,
                                               server_enc_cert, server_enc_certlen) != 1) {
         return -1;
     }
-    tlcp_socket_update_record_hash(&sm3_ctx, record, recordlen, &handshakes, &handshakeslen);
 
-    if (ctx->root_cert_len > 0 && ctx->root_certs != NULL) {
+    if (need_client_auth) {
         // TODO: Certificate Request消息
     }
 
     tls_trace(">>>> ServerHelloDone\n");
-    if (tlcp_socket_write_server_hello_done(ctx, conn, record, &recordlen) != 1) {
+    if (tlcp_socket_write_server_hello_done(conn, record, &recordlen) != 1) {
         return -1;
     }
 
+    if (need_client_auth) {
+        // TODO: Client Certificate消息
+    }
+    tls_trace("<<<< ClientKeyExchange\n");
+    if (tlcp_socket_read_client_key_exchange(conn, ctx->server_enc_key, record, &recordlen) != 1) {
+        return -1;
+    }
 
+    if (need_client_auth) {
+        // TODO: Certificate Verify消息
+    }
+    // 读取并处理密钥变更消息和客户端finished消息
+    if (tlcp_socket_read_client_spec_finished(conn, record, &recordlen) != 1) {
+        return -1;
+    }
+
+    conn->sm3_ctx = NULL;
     return 1;
 }
 

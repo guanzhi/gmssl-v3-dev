@@ -115,8 +115,11 @@ add_library(
         src/tls12.c
         src/tlcp.c
         src/tls13.c
+
+        # tlcp socket
         src/tlcp_socket.c
-        src/tlcp_msg.c
+        src/tlcp_socket_msg.c
+        src/tlcp_socket_key.c
 )
 
 
@@ -190,8 +193,10 @@ SET(
         src/tls12.c
         src/tlcp.c
         src/tls13.c
+
+        #  tlcp socket
         src/tlcp_socket.c
-        src/tlcp_msg.c
+        src/tlcp_socket_msg.c
         src/tlcp_socket_key.c
 )
 

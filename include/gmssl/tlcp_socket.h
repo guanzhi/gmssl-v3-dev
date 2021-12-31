@@ -164,14 +164,15 @@ typedef struct {
     uint8_t master_secret[48];          // 主密钥
     uint8_t key_block[96];              // 工作密钥，下面是各密钥的指针
 
-    uint8_t *client_write_MAC_secret;   // 客户端写MAC密钥
-    uint8_t *server_write_MAC_secret;   // 服务端写MAC密钥
-    uint8_t *client_write_key;          // 客户端写加密密钥
-    uint8_t *server_write_key;          // 服务端写加密密钥
-    uint8_t *client_write_IV;           // 客户端写IV
-    uint8_t *server_write_IV;           // 服务端写IV
+    SM3_HMAC_CTX client_write_mac_ctx;      // 客户端写MAC密钥
+    SM3_HMAC_CTX server_write_mac_ctx;      // 服务端写MAC密钥
+    SM4_KEY      client_write_enc_key;      // 客户端写加密密钥
+    SM4_KEY      server_write_enc_key;      // 服务端写加密密钥
+    uint8_t      *client_write_IV;          // 客户端写IV
+    uint8_t      *server_write_IV;          // 服务端写IV
 
-} TLCP_SOCKET_CONNECT;
+    SM3_CTX *sm3_ctx; // 用于握手阶段的校验码计算，握手结束后置为NULL
+}           TLCP_SOCKET_CONNECT;
 
 /**
  * 创建 TLCP listener接收TLCP连接
