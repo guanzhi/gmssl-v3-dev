@@ -72,6 +72,8 @@ static int load_cert_keys();
 
 static void handle_http(TLCP_SOCKET_CONNECT *conn);
 
+static void handle_read_write(TLCP_SOCKET_CONNECT *conn);
+
 int main(void) {
     TLCP_SOCKET_CTX     ctx;
     TLCP_SOCKET_KEY     socket_sigkey;
@@ -101,17 +103,40 @@ int main(void) {
             error_print();
             break;
         }
-        handle_http(&conn);
+//        handle_http(&conn);
+        handle_read_write(&conn);
         TLCP_SOCKET_Connect_Close(&conn);
     }
     // 关闭连接
     TLCP_SOCKET_Close(&ctx);
 }
 
-static void handle_http(TLCP_SOCKET_CONNECT *conn) {
-    size_t  len    = 0;
+static void handle_read_write(TLCP_SOCKET_CONNECT *conn) {
+    size_t  len                      = 0;
     uint8_t buf[TLS_MAX_RECORD_SIZE] = {0};
-    uint8_t resp[] = "HTTP/1.1 200 OK\r\n\
+    uint8_t resp[1024 * 1024]        = {0};
+    size_t  i                        = 0;
+    len = 0;
+    len = sizeof(buf);
+    if (TLCP_SOCKET_Read(conn, buf, &len) != 1) {
+        error_print();
+        return;
+    }
+    printf("%s\n", buf);
+    len    = TLCP_SOCKET_DEFAULT_FRAME_SIZE * 5 + 1;
+    for (i = 0; i < len; ++i) {
+        resp[i] = 'A';
+    }
+    if (TLCP_SOCKET_Write(conn, resp, len) != 1) {
+        error_print();
+        return;
+    }
+}
+
+static void handle_http(TLCP_SOCKET_CONNECT *conn) {
+    size_t  len                      = 0;
+    uint8_t buf[TLS_MAX_RECORD_SIZE] = {0};
+    uint8_t resp[]                   = "HTTP/1.1 200 OK\r\n\
 Content-Length: 6\r\n\
 Content-Type: text/plain; charset=utf-8\r\n\
 \r\n\
@@ -122,11 +147,10 @@ Hello!";
         return;
     }
     printf("%s\n", buf);
-    if (TLCP_SOCKET_Write(conn, resp, strlen(resp)) != 1) {
+    if (TLCP_SOCKET_Write(conn, resp, sizeof(resp)) != 1) {
         error_print();
         return;
     }
-
 }
 
 static int load_cert_keys() {

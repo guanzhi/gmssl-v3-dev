@@ -282,7 +282,7 @@ int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen) 
             offset += TLCP_SOCKET_DEFAULT_FRAME_SIZE;
             p = data + offset;
         } else {
-            if (tlcp_socket_write_record(conn, p, datalen - offset) != -1) {
+            if (tlcp_socket_write_record(conn, p, datalen - offset) != 1) {
                 return -1;
             }
             break;

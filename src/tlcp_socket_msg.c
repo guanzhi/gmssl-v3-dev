@@ -472,8 +472,8 @@ int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, siz
     const SM3_HMAC_CTX *hmac_ctx;
     const SM4_KEY      *enc_key;
     uint8_t            *seq_num;
-    uint8_t            mrec[TLCP_SOCKET_DEFAULT_FRAME_SIZE];        // 记录层明文
-    uint8_t            crec[TLCP_SOCKET_DEFAULT_FRAME_SIZE + 64];   // 记录层密码文
+    uint8_t            mrec[TLCP_SOCKET_DEFAULT_FRAME_SIZE + 8];   // 记录层明文 (头6B)
+    uint8_t            crec[TLCP_SOCKET_DEFAULT_FRAME_SIZE + 128];   // 记录层密码文 （头+加密填充和IV+MAC）
     size_t             mlen = sizeof(mrec);
     size_t             clen = sizeof(crec);
     // header 5B; iv 16B; mac 16B; padding 16B
