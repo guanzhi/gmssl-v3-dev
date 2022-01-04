@@ -175,7 +175,7 @@ int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn);
  *
  * @param conn      [in]      连接对象
  * @param data      [in]  待写入数据
- * @param datalen   [in]  数据长度，长度应小于1547
+ * @param datalen   [in]  数据长度，长度应小于 TLCP_SOCKET_DEFAULT_FRAME_SIZE
  * @return
  */
 int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen);

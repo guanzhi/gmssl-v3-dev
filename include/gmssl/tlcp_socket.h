@@ -127,11 +127,13 @@ typedef struct {
     TLCP_SOCKET_KEY               *client_sig_key;    // 客户端认证密钥对
     // ##################### 私有 #####################
     int                           _sock;              // SocketFD
-}           TLCP_SOCKET_CTX;
+
+} TLCP_SOCKET_CTX;
 
 
 #define TLCP_SOCKET_SERVER_END 0
 #define TLCP_SOCKET_CLIENT_END 1
+#define TLCP_SOCKET_DEFAULT_FRAME_SIZE 4096
 
 /**
  * TLCP SOCKET连接
@@ -139,6 +141,7 @@ typedef struct {
  * 用于维护在连接过程中需要上下文数据
  *
  * 注：握手阶段数据由Accept内部维护，握手结束后初始化完成连接参数。
+ * 其中以"_"开头的参数表示私有参数，不应该在外部访问。
  */
 typedef struct {
     int     sock;               // Socket FD
@@ -147,31 +150,34 @@ typedef struct {
     size_t  session_id_len;     // 会话ID长度
     uint8_t session_id[32];     // 会话ID
 
-    uint8_t client_random[32];  // 客户端随机数
-    uint8_t server_random[32];  // 服务端随机数
-
-    uint8_t client_seq_num[8];  // 客户端消息序列号
-    uint8_t server_seq_num[8];  // 服务端消息序列号
-
     uint8_t entity;                     // 0 - server, 1 - client
     uint8_t hash_size;                  // HASH分组长度
     uint8_t key_material_length;        // 对称密钥长度
     uint8_t fixed_iv_length;            // IV长度
 
-    uint8_t      master_secret[48];         // 主密钥
-    uint8_t      key_block[96];             // 工作密钥，下面是各密钥的指针
-    SM3_HMAC_CTX client_write_mac_ctx;      // 客户端写MAC密钥
-    SM3_HMAC_CTX server_write_mac_ctx;      // 服务端写MAC密钥
-    SM4_KEY      client_write_enc_key;      // 客户端写加密密钥
-    SM4_KEY      server_write_enc_key;      // 服务端写加密密钥
-    uint8_t      *client_write_IV;          // 客户端写IV
-    uint8_t      *server_write_IV;          // 服务端写IV
+    uint8_t _client_random[32];  // 客户端随机数
+    uint8_t _server_random[32];  // 服务端随机数
 
-    SM3_CTX *_sm3_ctx;                      // 用于握手阶段的校验码计算，握手结束后置为NULL
-    uint8_t raw_input[TLS_MAX_RECORD_SIZE]; // 未解密原始数据
-    uint8_t record[TLS_MAX_RECORD_SIZE];    // 解密后记录层消息
-    uint8_t *p;                             // 记录层中数据游标指针，随着读取逐渐向后移动
-    size_t  buf_remain;                     // 记录层中数据剩余长度
+    uint8_t _client_seq_num[8];  // 客户端消息序列号
+    uint8_t _server_seq_num[8];  // 服务端消息序列号
+
+    // 密钥
+    uint8_t      _master_secret[48];         // 主密钥
+    uint8_t      _key_block[96];             // 工作密钥，下面是各密钥的指针
+    SM3_HMAC_CTX _client_write_mac_ctx;      // 客户端写MAC密钥
+    SM3_HMAC_CTX _server_write_mac_ctx;      // 服务端写MAC密钥
+    SM4_KEY      _client_write_enc_key;      // 客户端写加密密钥
+    SM4_KEY      _server_write_enc_key;      // 服务端写加密密钥
+    uint8_t      *_client_write_IV;          // 客户端写IV
+    uint8_t      *_server_write_IV;          // 服务端写IV
+
+    // 连接上下文参数
+    uint8_t record[TLS_RECORD_MAX_PLAINDATA_SIZE];      // 解密后记录层消息
+    uint8_t _raw_input[TLS_MAX_RECORD_SIZE];            // 未解密原始数据
+    uint8_t *_p;                                        // 记录层中数据游标指针，随着读取逐渐向后移动
+    size_t  _buf_remain;                                // 记录层中数据剩余长度
+
+    SM3_CTX *_sm3_ctx;                                  // 用于握手阶段的校验码计算，握手结束后置为NULL
 
 } TLCP_SOCKET_CONNECT;
 
@@ -217,7 +223,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn);
  * @param conn [in] TCLP连接
  * @param buf  [out] 读取数据缓冲区
  * @param len  [out] [in,out] 输入缓冲区长度，输出读取到数据长度
- * @return 1 - 读取成功；-1 - EOF ; 0 - 失败
+ * @return 1 - 成功；-1 - 失败，并存储错误代码errno
  */
 int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
 
@@ -227,7 +233,7 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
  * @param conn [in] TCLP连接
  * @param data  [in] 读取数据缓冲区
  * @param datalen  [in] 读取数据长度
- * @return 1 - 写入成功；-1 - EOF ; 0 - 失败
+ * @return 1 - 成功；-1 - 失败，并存储错误代码errno
  */
 int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen);
 

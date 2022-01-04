@@ -205,7 +205,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
  * @param conn [in] TCLP连接
  * @param buf  [out] 读取数据缓冲区
  * @param len  [in,out] 输入缓冲区长度，输出读取到数据长度
- * @return 1 - 读取成功；-1 - EOF ; 0 - 失败
+ * @return 1 - 读取成功；-1 - 失败，并存储错误代码errno
  */
 int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
     size_t n = 0;
@@ -218,7 +218,7 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
         return 0;
     }
 
-    if (conn->buf_remain == 0) {
+    if (conn->_buf_remain == 0) {
         if (tlcp_socket_read_record(conn) == -1) {
             error_print();
             return 0;
@@ -243,16 +243,16 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
         }
     }
 
-    if (*len > conn->buf_remain) {
-        n = conn->buf_remain;
+    if (*len > conn->_buf_remain) {
+        n = conn->_buf_remain;
     } else {
         n = *len;
     }
 
-    memcpy(buf, conn->p, n);
+    memcpy(buf, conn->_p, n);
     // 调整数据偏移指针和剩余数据数量
-    conn->p += n;
-    conn->buf_remain -= n;
+    conn->_p += n;
+    conn->_buf_remain -= n;
     *len = n;
     return 1;
 }
@@ -263,10 +263,32 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
  * @param conn [in] TCLP连接
  * @param data  [in] 读取数据缓冲区
  * @param datalen  [in] 读取数据长度
- * @return 1 - 写入成功；-1 - EOF; 0 - 失败
+ * @return 1 - 成功；-1 - 失败，并存储错误代码errno
  */
-int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen){
-    // TODO
+int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen) {
+    uint8_t *p     = data;
+    size_t  offset = 0;
+
+    if (conn == NULL || data == NULL || datalen == 0) {
+        error_puts("非法参数");
+        return -1;
+    }
+    // 分段发送
+    for (;;) {
+        if (offset + TLCP_SOCKET_DEFAULT_FRAME_SIZE < datalen) {
+            if (tlcp_socket_write_record(conn, p, TLCP_SOCKET_DEFAULT_FRAME_SIZE) != 1) {
+                return -1;
+            }
+            offset += TLCP_SOCKET_DEFAULT_FRAME_SIZE;
+            p = data + offset;
+        } else {
+            if (tlcp_socket_write_record(conn, p, datalen - offset) != -1) {
+                return -1;
+            }
+            break;
+        }
+    }
+
     return 1;
 }
 

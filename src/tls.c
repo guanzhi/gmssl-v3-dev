@@ -1466,9 +1466,9 @@ int tls_record_recv(uint8_t *record, size_t *recordlen, int sock)
 		error_print();
 		return -1;
 	} else if (r != 5) {
-		// FIXME: 如果对方已经中断连接，那么我们要判断这个错误吗? 
-		error_print();
-		perror(""); // 否则打印ioctl错误
+        // 如果对方已经中断连接，那么认为是EOF不做处理，错误原因通过error.h接口获取
+		// error_print();
+		// perror(""); // 否则打印ioctl错误
 		return -1;
 	}
 

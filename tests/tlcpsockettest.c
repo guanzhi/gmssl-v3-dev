@@ -70,7 +70,7 @@ static SM2_KEY          enckey;
 
 static int load_cert_keys();
 
-void handle_http(TLCP_SOCKET_CONNECT *conn);
+static void handle_http(TLCP_SOCKET_CONNECT *conn);
 
 int main(void) {
     TLCP_SOCKET_CTX     ctx;
@@ -108,14 +108,14 @@ int main(void) {
     TLCP_SOCKET_Close(&ctx);
 }
 
-void handle_http(TLCP_SOCKET_CONNECT *conn) {
+static void handle_http(TLCP_SOCKET_CONNECT *conn) {
     size_t  len    = 0;
     uint8_t buf[TLS_MAX_RECORD_SIZE] = {0};
     uint8_t resp[] = "HTTP/1.1 200 OK\r\n\
-                     Content-Length: 6\r\n\
-                     Content-Type: text/plain; charset=utf-8\r\n\
-                     \r\n\
-                     Hello!";
+Content-Length: 6\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+Hello!";
     len = sizeof(buf);
     if (TLCP_SOCKET_Read(conn, buf, &len) != 1) {
         error_print();
