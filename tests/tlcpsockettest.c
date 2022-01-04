@@ -70,38 +70,63 @@ static SM2_KEY          enckey;
 
 static int load_cert_keys();
 
+void handle_http(TLCP_SOCKET_CONNECT *conn);
+
 int main(void) {
-    TLCP_SOCKET_CTX ctx;
-    TLCP_SOCKET_KEY socket_sigkey;
-    TLCP_SOCKET_KEY socket_enckey;
+    TLCP_SOCKET_CTX     ctx;
+    TLCP_SOCKET_KEY     socket_sigkey;
+    TLCP_SOCKET_KEY     socket_enckey;
     TLCP_SOCKET_CONNECT conn;
     // 加载证书和相关密钥
     if (load_cert_keys() != 1) {
         return -1;
     }
     // 创建SOCKET使用的密钥对
-    if (TLCP_SOCKET_gmssl_key(&socket_sigkey, &sigcert, &sigkey) != 1){
+    if (TLCP_SOCKET_gmssl_key(&socket_sigkey, &sigcert, &sigkey) != 1) {
         return -1;
     }
-    if (TLCP_SOCKET_gmssl_key(&socket_enckey, &enccert, &enckey) != 1){
+    if (TLCP_SOCKET_gmssl_key(&socket_enckey, &enccert, &enckey) != 1) {
         return -1;
     }
     // 初始化上下文
-    ctx.rand = rand_bytes;
+    ctx.rand           = rand_bytes;
     ctx.server_sig_key = &socket_sigkey;
     ctx.server_enc_key = &socket_enckey;
     // 打开端口监听TLCP连接
-    if (TLCP_SOCKET_Listen(&ctx, 30443) != 1){
+    if (TLCP_SOCKET_Listen(&ctx, 30443) != 1) {
         return -1;
     }
-    for(;;){
-        if (TLCP_SOCKET_Accept(&ctx, &conn) != 1){
+    for (;;) {
+        if (TLCP_SOCKET_Accept(&ctx, &conn) != 1) {
             error_print();
             break;
         }
+        handle_http(&conn);
+        TLCP_SOCKET_Connect_Close(&conn);
     }
     // 关闭连接
     TLCP_SOCKET_Close(&ctx);
+}
+
+void handle_http(TLCP_SOCKET_CONNECT *conn) {
+    size_t  len    = 0;
+    uint8_t buf[TLS_MAX_RECORD_SIZE] = {0};
+    uint8_t resp[] = "HTTP/1.1 200 OK\r\n\
+                     Content-Length: 6\r\n\
+                     Content-Type: text/plain; charset=utf-8\r\n\
+                     \r\n\
+                     Hello!";
+    len = sizeof(buf);
+    if (TLCP_SOCKET_Read(conn, buf, &len) != 1) {
+        error_print();
+        return;
+    }
+    printf("%s\n", buf);
+    if (TLCP_SOCKET_Write(conn, resp, strlen(resp)) != 1) {
+        error_print();
+        return;
+    }
+
 }
 
 static int load_cert_keys() {

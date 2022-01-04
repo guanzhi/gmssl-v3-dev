@@ -159,4 +159,36 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
  */
 int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
+
+/**
+ * 接收并解密记录层消息，数据将会被解密读取到缓冲区
+ *
+ * @param conn    [in]      连接对象
+ * @param data    [in,out]  解密消息缓冲区
+ * @param datalen [in,out]  解密数据长度
+ * @return  1 - 成功；-1 - 失败
+ */
+int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn);
+
+/**
+ * 写入并加密记录层消息
+ *
+ * @param conn      [in]      连接对象
+ * @param data      [in]  待写入数据
+ * @param datalen   [in]  数据长度，长度应小于1547
+ * @return
+ */
+int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen);
+
+
+/**
+ * 发送TLCP alert消息
+ *
+ * 如果消息为错误消息，那么将会关闭连接
+ *
+ * @param conn              [in] 连接上下文
+ * @param alert_description [in] 错误报警描述
+ */
+void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description);
+
 #endif //GMSSL_TLCP_SOCKET_MSG_H

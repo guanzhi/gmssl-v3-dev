@@ -191,7 +191,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
         return -1;
     }
     // 服务端变更密码协议，发送finished消息
-    if(tlcp_socket_write_server_spec_finished(conn, record, &recordlen) != 1) {
+    if (tlcp_socket_write_server_spec_finished(conn, record, &recordlen) != 1) {
         return -1;
     }
 
@@ -204,10 +204,58 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
  *
  * @param conn [in] TCLP连接
  * @param buf  [out] 读取数据缓冲区
- * @param len  [out] 读取数据长度
- * @return 1 - 读取成功；-1 - 读取失败
+ * @param len  [in,out] 输入缓冲区长度，输出读取到数据长度
+ * @return 1 - 读取成功；-1 - EOF ; 0 - 失败
  */
-int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
+int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
+    size_t n = 0;
+    if (conn == NULL || conn->sock <= 0) {
+        return 0;
+    }
+
+    if (buf == NULL || *len <= 0) {
+        error_puts("读取失败，缓冲区参数错误");
+        return 0;
+    }
+
+    if (conn->buf_remain == 0) {
+        if (tlcp_socket_read_record(conn) == -1) {
+            error_print();
+            return 0;
+        }
+        // 对读取的消息进行错误处理
+        if (conn->record[0] == TLS_record_alert) {
+            switch (conn->record[0]) {
+                case TLS_alert_level_warning:
+                    // 忽略错误继续读取
+//                    return TLCP_SOCKET_Read(conn, buf, len);
+                case TLS_alert_level_fatal:
+                    if (conn->record[1] == TLS_alert_close_notify) {
+                        return EOF;
+                    } else {
+                        error_print_msg("remote error alert description %d", conn->record[2]);
+                        return 0;
+                    }
+                default:
+                    error_puts("unknown alert message type");
+                    return 0;
+            }
+        }
+    }
+
+    if (*len > conn->buf_remain) {
+        n = conn->buf_remain;
+    } else {
+        n = *len;
+    }
+
+    memcpy(buf, conn->p, n);
+    // 调整数据偏移指针和剩余数据数量
+    conn->p += n;
+    conn->buf_remain -= n;
+    *len = n;
+    return 1;
+}
 
 /**
  * 向TLCP连接中加密验证写入数据
@@ -215,9 +263,12 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
  * @param conn [in] TCLP连接
  * @param data  [in] 读取数据缓冲区
  * @param datalen  [in] 读取数据长度
- * @return 1 - 写入成功；-1 - 写入失败
+ * @return 1 - 写入成功；-1 - EOF; 0 - 失败
  */
-int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen);
+int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen){
+    // TODO
+    return 1;
+}
 
 /**
  * 连接TLCP服务端

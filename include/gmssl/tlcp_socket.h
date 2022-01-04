@@ -141,14 +141,10 @@ typedef struct {
  * 注：握手阶段数据由Accept内部维护，握手结束后初始化完成连接参数。
  */
 typedef struct {
-    uint8_t record_r[TLS_MAX_RECORD_SIZE]; // 数据读取缓冲区
-    uint8_t record_w[TLS_MAX_RECORD_SIZE]; // 数据写入缓冲区
-
     int     sock;               // Socket FD
     int     version;            // 协议版本
     int     cipher_suite;       // 密码套件
     size_t  session_id_len;     // 会话ID长度
-    uint8_t entity;             // 0 - server, 1 - client
     uint8_t session_id[32];     // 会话ID
 
     uint8_t client_random[32];  // 客户端随机数
@@ -157,13 +153,13 @@ typedef struct {
     uint8_t client_seq_num[8];  // 客户端消息序列号
     uint8_t server_seq_num[8];  // 服务端消息序列号
 
+    uint8_t entity;                     // 0 - server, 1 - client
     uint8_t hash_size;                  // HASH分组长度
     uint8_t key_material_length;        // 对称密钥长度
     uint8_t fixed_iv_length;            // IV长度
 
-    uint8_t master_secret[48];          // 主密钥
-    uint8_t key_block[96];              // 工作密钥，下面是各密钥的指针
-
+    uint8_t      master_secret[48];         // 主密钥
+    uint8_t      key_block[96];             // 工作密钥，下面是各密钥的指针
     SM3_HMAC_CTX client_write_mac_ctx;      // 客户端写MAC密钥
     SM3_HMAC_CTX server_write_mac_ctx;      // 服务端写MAC密钥
     SM4_KEY      client_write_enc_key;      // 客户端写加密密钥
@@ -171,8 +167,13 @@ typedef struct {
     uint8_t      *client_write_IV;          // 客户端写IV
     uint8_t      *server_write_IV;          // 服务端写IV
 
-    SM3_CTX *_sm3_ctx; // 用于握手阶段的校验码计算，握手结束后置为NULL
-}           TLCP_SOCKET_CONNECT;
+    SM3_CTX *_sm3_ctx;                      // 用于握手阶段的校验码计算，握手结束后置为NULL
+    uint8_t raw_input[TLS_MAX_RECORD_SIZE]; // 未解密原始数据
+    uint8_t record[TLS_MAX_RECORD_SIZE];    // 解密后记录层消息
+    uint8_t *p;                             // 记录层中数据游标指针，随着读取逐渐向后移动
+    size_t  buf_remain;                     // 记录层中数据剩余长度
+
+} TLCP_SOCKET_CONNECT;
 
 /**
  * 创建 TLCP listener接收TLCP连接
@@ -215,8 +216,8 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn);
  *
  * @param conn [in] TCLP连接
  * @param buf  [out] 读取数据缓冲区
- * @param len  [out] 读取数据长度
- * @return 1 - 读取成功；-1 - 读取失败
+ * @param len  [out] [in,out] 输入缓冲区长度，输出读取到数据长度
+ * @return 1 - 读取成功；-1 - EOF ; 0 - 失败
  */
 int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
 
@@ -226,7 +227,7 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
  * @param conn [in] TCLP连接
  * @param data  [in] 读取数据缓冲区
  * @param datalen  [in] 读取数据长度
- * @return 1 - 写入成功；-1 - 写入失败
+ * @return 1 - 写入成功；-1 - EOF ; 0 - 失败
  */
 int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen);
 

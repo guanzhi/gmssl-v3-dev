@@ -121,10 +121,10 @@ typedef enum {
 	TLCP_cipher_rsa_sm4_gcm_sm3		= 0xe059,
 	TLCP_cipher_rsa_sm4_cbc_sha256		= 0xe01c,
 	TLCP_cipher_rsa_sm4_gcm_sha256		= 0xe05a,
-	GMSSL_cipher_ecdhe_sm2_with_sm4_sm3	= 0xe102,
+	GMSSL_cipher_ecdhe_sm2_with_sm4_sm3	    = 0xe102,
 	GMSSL_cipher_ecdhe_sm2_with_sm4_gcm_sm3	= 0xe107,
 	GMSSL_cipher_ecdhe_sm2_with_sm4_ccm_sm3	= 0xe108,
-	GMSSL_cipher_ecdhe_sm2_with_zuc_sm3	= 0xe10d,
+	GMSSL_cipher_ecdhe_sm2_with_zuc_sm3	    = 0xe10d,
 	TLS_cipher_empty_renegotiation_info_scsv = 0x00ff,
 
 	// TLS 1.3 ciphers (rfc 8446 p.133)
@@ -137,38 +137,38 @@ typedef enum {
 } TLS_CIPHER_SUITE;
 
 typedef enum {
-	TLS_record_invalid		= 0, // TLS 1.3
+	TLS_record_invalid		        = 0, // TLS 1.3
 	TLS_record_change_cipher_spec	= 20,
-	TLS_record_alert		= 21,
-	TLS_record_handshake		= 22,
-	TLS_record_application_data	= 23,
-	TLS_record_heartbeat		= 24,
-	TLS_record_tls12_cid		= 25,
+	TLS_record_alert		        = 21,
+	TLS_record_handshake		    = 22,
+	TLS_record_application_data	    = 23,
+	TLS_record_heartbeat		    = 24,
+	TLS_record_tls12_cid		    = 25,
 } TLS_RECORD_TYPE;
 
 typedef enum  {
-	TLS_handshake_hello_request		= 0,
-	TLS_handshake_client_hello		= 1,
-	TLS_handshake_server_hello		= 2,
-	TLS_handshake_hello_verify_request	= 3,
-	TLS_handshake_new_session_ticket	= 4,
-	TLS_handshake_end_of_early_data		= 5,
-	TLS_handshake_hello_retry_request	= 6,
-	TLS_handshake_encrypted_extensions	= 8,
-	TLS_handshake_certificate		= 11,
-	TLS_handshake_server_key_exchange	= 12,
-	TLS_handshake_certificate_request	= 13,
-	TLS_handshake_server_hello_done		= 14,
-	TLS_handshake_certificate_verify	= 15,
-	TLS_handshake_client_key_exchange	= 16,
-	TLS_handshake_finished			= 20,
-	TLS_handshake_certificate_url		= 21,
-	TLS_handshake_certificate_status	= 22,
-	TLS_handshake_supplemental_data		= 23,
-	TLS_handshake_key_update		= 24,
+	TLS_handshake_hello_request		        = 0,
+	TLS_handshake_client_hello		        = 1,
+	TLS_handshake_server_hello		        = 2,
+	TLS_handshake_hello_verify_request	    = 3,
+	TLS_handshake_new_session_ticket	    = 4,
+	TLS_handshake_end_of_early_data		    = 5,
+	TLS_handshake_hello_retry_request	    = 6,
+	TLS_handshake_encrypted_extensions	    = 8,
+	TLS_handshake_certificate		        = 11,
+	TLS_handshake_server_key_exchange	    = 12,
+	TLS_handshake_certificate_request	    = 13,
+	TLS_handshake_server_hello_done		    = 14,
+	TLS_handshake_certificate_verify	    = 15,
+	TLS_handshake_client_key_exchange	    = 16,
+	TLS_handshake_finished			        = 20,
+	TLS_handshake_certificate_url		    = 21,
+	TLS_handshake_certificate_status	    = 22,
+	TLS_handshake_supplemental_data		    = 23,
+	TLS_handshake_key_update		        = 24,
 	TLS_handshake_compressed_certificate	= 25,
-	TLS_handshake_ekt_key			= 26,
-	TLS_handshake_message_hash		= 254,
+	TLS_handshake_ekt_key			        = 26,
+	TLS_handshake_message_hash		        = 254,
 } TLS_HANDSHAKE_TYPE;
 
 typedef enum {
@@ -626,13 +626,6 @@ int tls_record_set_alert(uint8_t *record, size_t *recordlen,
 int tls_record_get_alert(const uint8_t *record,
 	int *alert_level,
 	int *alert_description);
-/**
- * 发送TLCP alert消息
- * @param alert_description 错误报警描述
- * @param sock socket连接
- * @return 发送结果，1 成功，-1 失败。
- */
-int tlcp_alert(int alert_description, int sock);
 
 const char *tls_change_cipher_spec_text(int change_cipher_spec);
 int tls_record_set_change_cipher_spec(uint8_t *record, size_t *recordlen);

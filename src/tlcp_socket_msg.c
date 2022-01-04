@@ -50,6 +50,7 @@
 #include <gmssl/tlcp_socket_msg.h>
 #include <gmssl/rand.h>
 #include <gmssl/error.h>
+#include <sys/unistd.h>
 
 
 static const int    tlcp_ciphers[]     = {TLCP_cipher_ecc_sm4_cbc_sm3};
@@ -65,7 +66,7 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn,
     // 读取消息
     if (tls_record_recv(record, recordlen, conn->sock) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
-        tlcp_alert(TLS_alert_protocol_version, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_protocol_version);
         error_print();
         return -1;
     }
@@ -74,12 +75,12 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn,
                                               conn->session_id, &conn->session_id_len,
                                               client_ciphers, &client_ciphers_count,
                                               NULL, 0) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
     if (conn->version != TLS_version_tlcp) {
-        tlcp_alert(TLS_alert_protocol_version, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_protocol_version);
         error_print();
         return -1;
     }
@@ -91,7 +92,7 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn,
         }
     }
     if (conn->cipher_suite == 0) {
-        tlcp_alert(TLS_alert_handshake_failure, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_handshake_failure);
         error_puts("no common cipher_suite");
         return -1;
     }
@@ -120,7 +121,7 @@ int tlcp_socket_write_server_hello(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_RandBy
                                               TLS_version_tlcp, conn->server_random,
                                               conn->session_id, conn->session_id_len,
                                               conn->cipher_suite, NULL, 0) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -147,7 +148,7 @@ int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
 
     // 序列化签名证书DER
     if (x509_certificate_to_der(ctx->server_sig_key->cert, &cp, &derlen) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -157,7 +158,7 @@ int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     cp     = der;
     derlen = 0;
     if (x509_certificate_to_der(ctx->server_enc_key->cert, &cp, &derlen) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -217,7 +218,7 @@ int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET
         return -1;
     }
     if (tlcp_record_set_handshake_server_key_exchange_pke(record, recordlen, sig, siglen) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -231,7 +232,7 @@ int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET
 
 int tlcp_socket_write_server_hello_done(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
     if (tls_record_set_handshake_server_hello_done(record, recordlen) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -268,7 +269,7 @@ int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_
     if (enc_key->decrypter(enc_key->ctx,
                            enced_pms, enced_pms_len,
                            pre_master_secret, &pre_master_secret_len) != 1) {
-        tlcp_alert(TLS_alert_decrypt_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_decrypt_error);
         return -1;
     }
     // 生成预主密钥
@@ -276,7 +277,7 @@ int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_
     if (tls_prf(pre_master_secret, pre_master_secret_len, "master secret",
                 conn->client_random, 32, conn->server_random, 32,
                 48, conn->master_secret) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -284,7 +285,7 @@ int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_
     if (tls_prf(conn->master_secret, 48, "key expansion",
                 conn->server_random, 32, conn->client_random, 32,
                 96, conn->key_block) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -331,7 +332,7 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
         return -1;
     }
     if (tls_record_get_change_cipher_spec(record) != 1) {
-        tlcp_alert(TLS_alert_unexpected_message, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_unexpected_message);
         return -1;
     }
 
@@ -349,7 +350,7 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
     }
     tls_seq_num_incr(conn->client_seq_num);
     if (tls_record_get_handshake_finished(finished, verify_data) != 1) {
-        tlcp_alert(TLS_alert_illegal_parameter, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_illegal_parameter);
         return -1;
     }
 
@@ -359,7 +360,7 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
     // 计算校验数据 PRF(master_secret, finished_label, SM3(handshake_messages))[0..11]
     if (tls_prf(conn->master_secret, 48, "client finished", sm3_hash, 32, NULL, 0,
                 12, local_verify_data) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -367,7 +368,7 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
 
     // 比较数据校验码是否一致
     if (memcmp(local_verify_data, verify_data, 12) != 0) {
-        tlcp_alert(TLS_alert_handshake_failure, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_handshake_failure);
         error_puts("client_finished.verify_data verification failure");
         return -1;
     }
@@ -397,7 +398,7 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
     sm3_finish(conn->_sm3_ctx, sm3_hash);
     if (tls_prf(conn->master_secret, 48, "server finished", sm3_hash, 32, NULL, 0,
                 12, verify_data) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -405,7 +406,7 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
     finished[1] = record[1];
     finished[2] = record[2];
     if (tls_record_set_handshake_finished(finished, &finishedlen, verify_data) != 1) {
-        tlcp_alert(TLS_alert_internal_error, conn->sock);
+        tlcp_socket_alert(conn,TLS_alert_internal_error);
         error_print();
         return -1;
     }
@@ -421,4 +422,139 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
         return -1;
     }
     return 1;
+}
+
+
+int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn) {
+    const SM3_HMAC_CTX *hmac_ctx;
+    const SM4_KEY      *dec_key;
+    uint8_t            *seq_num;
+    uint8_t            *crec = conn->raw_input;  // 密文
+    uint8_t            *mrec = conn->record;     // 原文
+    size_t             mlen  = sizeof(conn->raw_input);
+    size_t             clen  = sizeof(conn->record);
+    int                vers  = 0;
+
+    if (conn->entity == TLCP_SOCKET_CLIENT_END) {
+        hmac_ctx = &conn->server_write_mac_ctx;
+        dec_key  = &conn->server_write_enc_key;
+        seq_num  = conn->server_seq_num;
+    } else {
+        hmac_ctx = &conn->client_write_mac_ctx;
+        dec_key  = &conn->client_write_enc_key;
+        seq_num  = conn->client_seq_num;
+    }
+    tls_trace("<<<< ApplicationData\n");
+    if (tls_record_recv(crec, &clen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    // 解密消息。
+    vers = crec[1] << 8 | crec[2];
+    if (conn->version != vers
+        || tls_record_decrypt(hmac_ctx, dec_key, seq_num, crec, clen, mrec, &mlen) != 1
+        || tls_seq_num_incr(seq_num) != 1) {
+        error_print();
+        return -1;
+    }
+    (void) tls_record_print(stderr, mrec, mlen, 0, 0);
+    // 向后偏移头部，得到数据部分
+    conn->p          = mrec + 5;
+    // 设置剩余长度为除头部分外长度
+    conn->buf_remain = mlen - 5;
+    // memcpy(data, mrec + 5, mlen - 5);
+    // *datalen = mlen - 5;
+    return 1;
+}
+
+
+int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen) {
+    const SM3_HMAC_CTX *hmac_ctx;
+    const SM4_KEY      *enc_key;
+    uint8_t            *seq_num;
+    uint8_t            mrec[1600];
+    uint8_t            crec[1600];
+    size_t             mlen = sizeof(mrec);
+    size_t             clen = sizeof(crec);
+    // header 5B; iv 16B; mac 16B; padding 16B
+    if (datalen > (mlen - 53)) {
+        error_puts("datalen overflow");
+        return -1;
+    }
+
+    if (conn->entity == TLCP_SOCKET_CLIENT_END) {
+        hmac_ctx = &conn->client_write_mac_ctx;
+        enc_key  = &conn->client_write_enc_key;
+        seq_num  = conn->client_seq_num;
+    } else {
+        hmac_ctx = &conn->server_write_mac_ctx;
+        enc_key  = &conn->server_write_enc_key;
+        seq_num  = conn->server_seq_num;
+    }
+
+    tls_trace(">>>> ApplicationData\n");
+    if (tls_record_set_version(mrec, conn->version) != 1
+        || tls_record_set_application_data(mrec, &mlen, data, datalen) != 1
+        || tls_record_encrypt(hmac_ctx, enc_key, seq_num, mrec, mlen, crec, &clen) != 1
+        || tls_seq_num_incr(seq_num) != 1
+        || tls_record_send(crec, clen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    (void) tls_record_print(stderr, crec, clen, 0, 0);
+    return 1;
+}
+
+
+void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description) {
+    uint8_t record[8];
+    size_t  len;
+    int     alert_level;
+    switch (alert_description) {
+        case TLS_alert_user_canceled:
+            alert_level = TLS_alert_level_warning;
+            break;
+        case TLS_alert_close_notify:
+        case TLS_alert_unexpected_message:
+        case TLS_alert_bad_record_mac:
+        case TLS_alert_decryption_failed:
+        case TLS_alert_record_overflow:
+        case TLS_alert_decompression_failure:
+        case TLS_alert_handshake_failure:
+        case TLS_alert_no_certificate:
+        case TLS_alert_bad_certificate:
+        case TLS_alert_unsupported_certificate:
+        case TLS_alert_certificate_revoked:
+        case TLS_alert_certificate_expired:
+        case TLS_alert_certificate_unknown:
+        case TLS_alert_illegal_parameter:
+        case TLS_alert_unknown_ca:
+        case TLS_alert_access_denied:
+        case TLS_alert_decode_error:
+        case TLS_alert_decrypt_error:
+        case TLS_alert_export_restriction:
+        case TLS_alert_protocol_version:
+        case TLS_alert_insufficient_security:
+        case TLS_alert_internal_error:
+        case TLS_alert_no_renegotiation:
+        case TLS_alert_unsupported_site2site:
+        case TLS_alert_no_area:
+        case TLS_alert_unsupported_areatype:
+        case TLS_alert_bad_ibcparam:
+        case TLS_alert_unsupported_ibcparam:
+        case TLS_alert_identity_need:
+        default:
+            alert_level = TLS_alert_level_fatal;
+            break;
+    }
+    record[1] = TLCP_VERSION_MAJOR;
+    record[2] = TLCP_VERSION_MINOR;
+    // 设置消息
+    if (tls_record_set_alert(record, &len, alert_level, alert_description) != 1) {
+        return;
+    }
+    if (tls_record_send(record, len, conn->sock) == 1 && alert_level == TLS_alert_level_fatal) {
+        //关闭连接
+        close(conn->sock);
+    }
 }
