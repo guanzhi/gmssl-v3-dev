@@ -376,7 +376,6 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
     return 1;
 }
 
-
 int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
     uint8_t sm3_hash[32];
     uint8_t verify_data[12];
@@ -424,7 +423,6 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
     return 1;
 }
 
-
 int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn) {
     const SM3_HMAC_CTX *hmac_ctx;
     const SM4_KEY      *dec_key;
@@ -467,7 +465,6 @@ int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn) {
     return 1;
 }
 
-
 int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen) {
     const SM3_HMAC_CTX *hmac_ctx;
     const SM4_KEY      *enc_key;
@@ -504,7 +501,6 @@ int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, siz
     // (void) tls_record_print(stderr, crec, clen, 0, 0);
     return 1;
 }
-
 
 void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description) {
     uint8_t record[8];
@@ -557,4 +553,54 @@ void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description) {
         //关闭连接
         close(conn->sock);
     }
+}
+
+int tlcp_socket_write_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                   uint8_t *record, size_t *recordlen) {
+    tlcp_socket_random_generate(ctx->rand, conn->_client_random);
+    if (tls_record_set_handshake_client_hello(record, recordlen,
+                                              TLS_version_tlcp, conn->_client_random, NULL, 0,
+                                              tlcp_ciphers, tlcp_ciphers_count, NULL, 0) != 1) {
+        error_print();
+        return -1;
+    }
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+
+    return 1;
+}
+
+int tlcp_socket_read_server_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
+    if (tls_record_recv(record, recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    // 检查协议版本
+    if (tls_record_version(record) != TLS_version_tlcp) {
+        tlcp_socket_alert(conn, TLS_alert_protocol_version);
+        return -1;
+    }
+    if (tls_record_get_handshake_server_hello(record,
+                                              &conn->version, conn->_server_random, conn->session_id,
+                                              &conn->session_id_len,
+                                              &conn->cipher_suite, NULL, 0) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    // 检查协议版本
+    if (conn->version != TLS_version_tlcp) {
+        tlcp_socket_alert(conn, TLS_alert_protocol_version);
+        return -1;
+    }
+    // 选择密码套件
+    if (tls_cipher_suite_in_list(conn->cipher_suite, tlcp_ciphers, tlcp_ciphers_count) != 1) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+    return 1;
 }

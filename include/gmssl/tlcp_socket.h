@@ -126,7 +126,7 @@ typedef struct {
     TLCP_SOCKET_KEY               *server_enc_key;    // 服务器加密密钥对
     TLCP_SOCKET_KEY               *client_sig_key;    // 客户端认证密钥对
     // ##################### 私有 #####################
-    int                           _sock;              // SocketFD
+    int                           _sock;              // Server SocketFD
 
 } TLCP_SOCKET_CTX;
 
@@ -238,13 +238,15 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
 int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen);
 
 /**
- * 连接TLCP服务端
+ * 连接TLCP服务端，并进行TLCP握手
  *
- * @param ctx  [in] 上下文
- * @param conn [out] TLCP连接
+ * @param ctx       [in] 上下文
+ * @param conn      [out] TLCP连接
+ * @param hostname  [in] 主机地址（IP）
+ * @param port      [in] 主机端口
  * @return 1 - 连接成功；-1 - 连接失败
  */
-int TLCP_SOCKET_Connect(TLCP_SOCKET_CONNECT *ctx, TLS_CONNECT *conn);
+int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port);
 
 /**
  * 断开TLCP连接

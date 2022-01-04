@@ -54,6 +54,7 @@
 #include <gmssl/tlcp_socket_msg.h>
 #include <gmssl/rand.h>
 #include <gmssl/error.h>
+#include <arpa/inet.h>
 
 
 int TLCP_SOCKET_Listen(TLCP_SOCKET_CTX *ctx, int port) {
@@ -116,17 +117,17 @@ void TLCP_SOCKET_Close(TLCP_SOCKET_CTX *ctx) {
  */
 int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     uint8_t            record[TLS_MAX_RECORD_SIZE];
-    size_t             recordlen;
+    size_t             recordlen          = 0;
     uint8_t            server_enc_cert[TLS_MAX_CERTIFICATES_SIZE];
-    size_t             server_enc_certlen;
-    uint8_t            need_client_auth = 0;
+    size_t             server_enc_certlen = 0;
+    uint8_t            need_client_auth   = 0;
     struct sockaddr_in client_addr;
-    socklen_t          client_addrlen   = sizeof(client_addr);
+    socklen_t          client_addrlen     = sizeof(client_addr);
     SM3_CTX            sm3_ctx; // 握手消息Hash
 
 
     if (ctx == NULL || conn == NULL) {
-        error_print();
+        error_puts("illegal parameter");
         return -1;
     }
     need_client_auth = ctx->root_cert_len > 0 && ctx->root_certs != NULL;
@@ -214,7 +215,7 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
     }
 
     if (buf == NULL || *len <= 0) {
-        error_puts("读取失败，缓冲区参数错误");
+        error_puts("illegal parameter buf");
         return 0;
     }
 
@@ -270,7 +271,7 @@ int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen) 
     size_t  offset = 0;
 
     if (conn == NULL || data == NULL || datalen == 0) {
-        error_puts("非法参数");
+        error_puts("illegal parameter");
         return -1;
     }
     // 分段发送
@@ -292,14 +293,52 @@ int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen) 
     return 1;
 }
 
-/**
- * 连接TLCP服务端
- *
- * @param ctx  [in] 上下文
- * @param conn [out] TLCP连接
- * @return 1 - 连接成功；-1 - 连接失败
- */
-int TLCP_SOCKET_Connect(TLCP_SOCKET_CONNECT *ctx, TLS_CONNECT *conn);
+
+int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port) {
+    SM3_CTX            sm3_ctx; // 握手消息Hash
+    uint8_t            record[TLS_MAX_RECORD_SIZE] = {0};
+    size_t             recordlen = 0;
+    struct sockaddr_in server_addr = {0};
+
+    if (conn == NULL || ctx == NULL || hostname == NULL || port <= 0) {
+        error_puts("illegal parameter");
+        return -1;
+    }
+
+    server_addr.sin_addr.s_addr = inet_addr(hostname);
+    server_addr.sin_family      = AF_INET;
+    server_addr.sin_port        = htons(port);
+    memset(conn, 0, sizeof(*conn));
+
+    if ((conn->sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        error_print();
+        return -1;
+    }
+    if (connect(conn->sock, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+        error_print();
+        return -1;
+    }
+
+    sm3_init(&sm3_ctx);
+    conn->_sm3_ctx = &sm3_ctx;
+    conn->entity   = TLCP_SOCKET_SERVER_END;
+    tls_record_set_version(record, TLS_version_tlcp);
+
+    // 开始握手
+    tls_trace(">>>> ClientHello\n");
+    if (tlcp_socket_write_client_hello(ctx, conn, record, &recordlen) != 1) {
+        // perror("ClientHello");
+        return -1;
+    }
+    tls_trace("<<<< ServerHello\n");
+    if (tlcp_socket_read_server_hello(conn, record, &recordlen) !=1 ){
+        return -1;
+    }
+    // TODO:
+
+    conn->_sm3_ctx = NULL;
+    return 1;
+}
 
 /**
  * 断开TLCP连接

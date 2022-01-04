@@ -176,7 +176,7 @@ int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn);
  * @param conn      [in]      连接对象
  * @param data      [in]  待写入数据
  * @param datalen   [in]  数据长度，长度应小于 TLCP_SOCKET_DEFAULT_FRAME_SIZE
- * @return
+ * @return  1 - 成功；-1 - 失败
  */
 int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen);
 
@@ -190,5 +190,27 @@ int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, siz
  * @param alert_description [in] 错误报警描述
  */
 void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description);
+
+/**
+ * 生成并写入客户端Hello消息
+ *
+ * @param ctx       [in] 上下文
+ * @param conn      [in] socket连接
+ * @param record    [in,out] 收到的记录层数据
+ * @param recordlen [in,out] 记录层数据
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_write_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                   uint8_t *record, size_t *recordlen);
+
+/**
+ * 读取并处理服务端Hello消息
+ *
+ * @param conn      [in] socket连接
+ * @param record    [in,out] 收到的记录层数据
+ * @param recordlen [in,out] 记录层数据
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_read_server_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
 #endif //GMSSL_TLCP_SOCKET_MSG_H
