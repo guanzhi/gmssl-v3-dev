@@ -50,6 +50,9 @@
 
 #ifndef GMSSL_TLCP_SOCKET_MSG_H
 #define GMSSL_TLCP_SOCKET_MSG_H
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <gmssl/tlcp_socket.h>
 
@@ -173,7 +176,7 @@ int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn);
 /**
  * 写入并加密记录层消息
  *
- * @param conn      [in]      连接对象
+ * @param conn      [in]  连接对象
  * @param data      [in]  待写入数据
  * @param datalen   [in]  数据长度，长度应小于 TLCP_SOCKET_DEFAULT_FRAME_SIZE
  * @return  1 - 成功；-1 - 失败
@@ -213,4 +216,25 @@ int tlcp_socket_write_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *co
  */
 int tlcp_socket_read_server_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
+
+/**
+ * 读取并解析服务端证书
+ *
+ * @param ctx               [in] 上下文
+ * @param conn              [in] socket连接
+ * @param record            [in,out] 收到的记录层数据
+ * @param recordlen         [in,out] 记录层数据
+ * @param server_certs      [in,out] 服务端证书（按顺序签名证书、加密证书）
+ * @param enc_cert_der      [out] 加密证书DER编码
+ * @param enc_cert_der_len  [out] 加密证书DER编码长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_read_server_certs(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                  uint8_t *record, size_t *recordlen,
+                                  X509_CERTIFICATE server_certs[2],
+                                  uint8_t *enc_cert_der, size_t *enc_cert_der_len);
+
+#ifdef  __cplusplus
+}
+#endif
 #endif //GMSSL_TLCP_SOCKET_MSG_H

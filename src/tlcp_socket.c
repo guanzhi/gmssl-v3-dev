@@ -297,8 +297,11 @@ int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen) 
 int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port) {
     SM3_CTX            sm3_ctx; // 握手消息Hash
     uint8_t            record[TLS_MAX_RECORD_SIZE] = {0};
-    size_t             recordlen = 0;
-    struct sockaddr_in server_addr = {0};
+    uint8_t            enc_cert_der[TLS_MAX_CERT_SIZE] = {0};   // 加密证书DER
+    X509_CERTIFICATE   server_certs[2];
+    size_t             recordlen                   = 0;
+    size_t             enc_cert_der_len                = 0;     // 加密证书DER长度
+    struct sockaddr_in server_addr                 = {0};
 
     if (conn == NULL || ctx == NULL || hostname == NULL || port <= 0) {
         error_puts("illegal parameter");
@@ -331,7 +334,14 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
         return -1;
     }
     tls_trace("<<<< ServerHello\n");
-    if (tlcp_socket_read_server_hello(conn, record, &recordlen) !=1 ){
+    if (tlcp_socket_read_server_hello(conn, record, &recordlen) != 1) {
+        return -1;
+    }
+    tls_trace("<<<< ServerCertificate\n");
+    if (tlcp_socket_read_server_certs(ctx, conn,
+                                      record, &recordlen,
+                                      server_certs,
+                                      enc_cert_der, &enc_cert_der_len) != 1) {
         return -1;
     }
     // TODO:
@@ -339,6 +349,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     conn->_sm3_ctx = NULL;
     return 1;
 }
+
 
 /**
  * 断开TLCP连接

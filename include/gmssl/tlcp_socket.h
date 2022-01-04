@@ -50,6 +50,9 @@
 
 #ifndef GMSSL_TLCP_SOCKET_H
 #define GMSSL_TLCP_SOCKET_H
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -112,21 +115,21 @@ typedef int (*TLCP_SOCKET_Decrypter_FuncPtr)(void *ctx, uint8_t *ciphertext, siz
  * 公钥、证书、签名、解密
  */
 typedef struct {
-    void                          *ctx;      // 上下文，可以是一个设备句柄或会话指针用于函数调用。
-    X509_CERTIFICATE              *cert;     // 证书（公钥）
-    TLCP_SOCKET_Signer_FuncPtr    signer;    // 密钥对的签名实现
+    void *ctx;      // 上下文，可以是一个设备句柄或会话指针用于函数调用。
+    X509_CERTIFICATE *cert;     // 证书（公钥）
+    TLCP_SOCKET_Signer_FuncPtr signer;    // 密钥对的签名实现
     TLCP_SOCKET_Decrypter_FuncPtr decrypter; // 密钥对的解密实现
-}           TLCP_SOCKET_KEY;
+} TLCP_SOCKET_KEY;
 
 typedef struct {
-    TLCP_SOCKET_RandBytes_FuncPtr rand;               // 随机源
-    X509_CERTIFICATE              *root_certs;        // 根证书列表，客户端用于验证服务端证书，服务端用于验证客户端证书，如果为空表示不验证。
-    size_t                        root_cert_len;      // 根证书数量
-    TLCP_SOCKET_KEY               *server_sig_key;    // 服务器签名密钥对
-    TLCP_SOCKET_KEY               *server_enc_key;    // 服务器加密密钥对
-    TLCP_SOCKET_KEY               *client_sig_key;    // 客户端认证密钥对
+    TLCP_SOCKET_RandBytes_FuncPtr rand;     // 随机源
+    X509_CERTIFICATE *root_certs;           // 根证书列表，客户端用于验证服务端证书，服务端用于验证客户端证书，如果为空表示不验证。
+    int root_cert_len;                      // 根证书数量
+    TLCP_SOCKET_KEY *server_sig_key;        // 服务器签名密钥对
+    TLCP_SOCKET_KEY *server_enc_key;        // 服务器加密密钥对
+    TLCP_SOCKET_KEY *client_sig_key;        // 客户端认证密钥对
     // ##################### 私有 #####################
-    int                           _sock;              // Server SocketFD
+    int _sock;              // Server SocketFD
 
 } TLCP_SOCKET_CTX;
 
@@ -144,10 +147,10 @@ typedef struct {
  * 其中以"_"开头的参数表示私有参数，不应该在外部访问。
  */
 typedef struct {
-    int     sock;               // Socket FD
-    int     version;            // 协议版本
-    int     cipher_suite;       // 密码套件
-    size_t  session_id_len;     // 会话ID长度
+    int sock;               // Socket FD
+    int version;            // 协议版本
+    int cipher_suite;       // 密码套件
+    size_t session_id_len;     // 会话ID长度
     uint8_t session_id[32];     // 会话ID
 
     uint8_t entity;                     // 0 - server, 1 - client
@@ -162,20 +165,20 @@ typedef struct {
     uint8_t _server_seq_num[8];  // 服务端消息序列号
 
     // 密钥
-    uint8_t      _master_secret[48];         // 主密钥
-    uint8_t      _key_block[96];             // 工作密钥，下面是各密钥的指针
+    uint8_t _master_secret[48];         // 主密钥
+    uint8_t _key_block[96];             // 工作密钥，下面是各密钥的指针
     SM3_HMAC_CTX _client_write_mac_ctx;      // 客户端写MAC密钥
     SM3_HMAC_CTX _server_write_mac_ctx;      // 服务端写MAC密钥
-    SM4_KEY      _client_write_enc_key;      // 客户端写加密密钥
-    SM4_KEY      _server_write_enc_key;      // 服务端写加密密钥
-    uint8_t      *_client_write_IV;          // 客户端写IV
-    uint8_t      *_server_write_IV;          // 服务端写IV
+    SM4_KEY _client_write_enc_key;      // 客户端写加密密钥
+    SM4_KEY _server_write_enc_key;      // 服务端写加密密钥
+    uint8_t *_client_write_IV;          // 客户端写IV
+    uint8_t *_server_write_IV;          // 服务端写IV
 
     // 连接上下文参数
     uint8_t record[TLS_RECORD_MAX_PLAINDATA_SIZE];      // 解密后记录层消息
     uint8_t _raw_input[TLS_MAX_RECORD_SIZE];            // 未解密原始数据
     uint8_t *_p;                                        // 记录层中数据游标指针，随着读取逐渐向后移动
-    size_t  _buf_remain;                                // 记录层中数据剩余长度
+    size_t _buf_remain;                                // 记录层中数据剩余长度
 
     SM3_CTX *_sm3_ctx;                                  // 用于握手阶段的校验码计算，握手结束后置为NULL
 
@@ -265,4 +268,7 @@ void TLCP_SOCKET_Connect_Close(TLCP_SOCKET_CONNECT *conn);
  */
 int TLCP_SOCKET_gmssl_key(TLCP_SOCKET_KEY *socket_key, X509_CERTIFICATE *cert, SM2_KEY *sm2_key);
 
+#ifdef  __cplusplus
+}
+#endif
 #endif //GMSSL_TLCP_SOCKET_H
