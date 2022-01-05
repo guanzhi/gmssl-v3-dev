@@ -295,13 +295,14 @@ int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen) 
 
 
 int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port) {
-    SM3_CTX            sm3_ctx; // 握手消息Hash
-    uint8_t            record[TLS_MAX_RECORD_SIZE] = {0};
-    uint8_t            enc_cert_der[TLS_MAX_CERT_SIZE] = {0};   // 加密证书DER
-    X509_CERTIFICATE   server_certs[2];
-    size_t             recordlen                   = 0;
-    size_t             enc_cert_der_len                = 0;     // 加密证书DER长度
-    struct sockaddr_in server_addr                 = {0};
+    SM3_CTX            sm3_ctx;         // 握手消息Hash
+    X509_CERTIFICATE   server_certs[2]; // 服务端证书：签名证书[0]、加密证书[1]
+    uint8_t            record[TLS_MAX_RECORD_SIZE]        = {0};
+    uint8_t            enc_cert_vector[TLS_MAX_CERT_SIZE] = {0};   // 加密证书DER向量
+    size_t             recordlen                          = 0;
+    size_t             enc_cert_vector_len                = 0;     // 加密证书DER向量长度
+    struct sockaddr_in server_addr                        = {0};
+    uint8_t            need_auth                          = 0;     // 是否需要客户端身份认证 0 - 不需要; 1 - 需要
 
     if (conn == NULL || ctx == NULL || hostname == NULL || port <= 0) {
         error_puts("illegal parameter");
@@ -341,10 +342,28 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     if (tlcp_socket_read_server_certs(ctx, conn,
                                       record, &recordlen,
                                       server_certs,
-                                      enc_cert_der, &enc_cert_der_len) != 1) {
+                                      enc_cert_vector, &enc_cert_vector_len) != 1) {
         return -1;
     }
-    // TODO:
+    tls_trace("<<<< ServerKeyExchange\n");
+    if (tlcp_socket_read_server_key_exchange(conn,
+                                             record, &recordlen,
+                                             &server_certs[0],
+                                             enc_cert_vector, enc_cert_vector_len) != 1) {
+        return -1;
+    }
+    // 解析并处理证书请求（如果存在）和服务端Done
+    if (tlcp_socket_read_cert_req_server_done(ctx, conn, record, &recordlen, &need_auth) != 1) {
+        return -1;
+    }
+
+    if (need_auth == 1) {
+        // TODO: 客户端身份认证
+    }
+    tls_trace(">>>> ClientKeyExchange\n");
+    if (tlcp_socket_write_client_key_exchange(conn, record, &recordlen, &server_certs[1]) != 1) {
+        return -1;
+    }
 
     conn->_sm3_ctx = NULL;
     return 1;

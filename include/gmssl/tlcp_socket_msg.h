@@ -220,19 +220,63 @@ int tlcp_socket_read_server_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, si
 /**
  * 读取并解析服务端证书
  *
- * @param ctx               [in] 上下文
- * @param conn              [in] socket连接
- * @param record            [in,out] 收到的记录层数据
- * @param recordlen         [in,out] 记录层数据
- * @param server_certs      [in,out] 服务端证书（按顺序签名证书、加密证书）
- * @param enc_cert_der      [out] 加密证书DER编码
- * @param enc_cert_der_len  [out] 加密证书DER编码长度
+ * @param ctx                   [in] 上下文
+ * @param conn                  [in] socket连接
+ * @param record                [in,out] 收到的记录层数据
+ * @param recordlen             [in,out] 记录层数据
+ * @param server_certs          [in,out] 服务端证书（按顺序签名证书、加密证书）
+ * @param enc_cert_vector       [out] 加密证书DER编码向量
+ * @param enc_cert_vector_len   [out] 加密证书DER编码向量长度
  * @return 1 - 成功；-1 - 失败
  */
 int tlcp_socket_read_server_certs(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                   uint8_t *record, size_t *recordlen,
                                   X509_CERTIFICATE server_certs[2],
-                                  uint8_t *enc_cert_der, size_t *enc_cert_der_len);
+                                  uint8_t *enc_cert_vector, size_t *enc_cert_der_len);
+
+/**
+ * 读取并处理服务端密钥交换
+ *
+ * 验证签名值
+ *
+ * @param conn                  [in] socket连接
+ * @param record                [in,out] 收到的记录层数据
+ * @param recordlen             [in,out] 记录层数据
+ * @param server_sig_cert       [in] 服务端签名证书
+ * @param enc_cert_vector       [in] 服务端加密证书向量
+ * @param enc_cert_vector_len   [in] 服务端加密证书向量长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_read_server_key_exchange(TLCP_SOCKET_CONNECT *conn,
+                                         uint8_t *record, size_t *recordlen,
+                                         X509_CERTIFICATE *server_sig_cert,
+                                         uint8_t *enc_cert_vector, size_t enc_cert_vector_len);
+
+/**
+ * 读取并处理证书请求(如果存在)和服务端Done消息
+ *
+ * @param ctx                   [in] 上下文
+ * @param conn                  [in] socket连接
+ * @param record                [in,out] 记录层数据
+ * @param recordlen             [in,out] 记录层数据长度
+ * @param need_auth             [out] 是否需要客户端认证
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, uint8_t *record,
+                                          size_t *recordlen, uint8_t *need_auth);
+
+/**
+ * 生成预主密钥工作密钥，并写入客户端密钥交换消息
+ *
+ * @param conn                  [in] socket连接
+ * @param record                [in,out] 记录层数据
+ * @param recordlen             [in,out] 记录层数据长度
+ * @param server_enc_cert       [in] 加密证书
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
+                                          uint8_t *record, size_t *recordlen,
+                                          X509_CERTIFICATE *server_enc_cert);
 
 #ifdef  __cplusplus
 }
