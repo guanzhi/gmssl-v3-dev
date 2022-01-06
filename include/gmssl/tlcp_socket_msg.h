@@ -278,6 +278,16 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
                                           uint8_t *record, size_t *recordlen,
                                           X509_CERTIFICATE *server_enc_cert);
 
+/**
+ *
+ *
+ * @param conn                  [in] socket连接
+ * @param record                [in,out] 记录层数据
+ * @param recordlen             [in,out] 记录层数据长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
+
 #ifdef  __cplusplus
 }
 #endif

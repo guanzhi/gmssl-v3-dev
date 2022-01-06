@@ -319,12 +319,13 @@ int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_
 
 int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
 
-    uint8_t finished[256];
-    size_t  finishedlen = sizeof(finished);
-    uint8_t verify_data[12];
-    uint8_t local_verify_data[12];
-    uint8_t sm3_hash[32];
     SM3_CTX tmp_sm3_ctx;
+    uint8_t sm3_hash[32]          = {0};
+    uint8_t finished[256]         = {0};
+    uint8_t verify_data[12]       = {0};
+    uint8_t local_verify_data[12] = {0};
+    size_t  finishedlen           = sizeof(finished);
+
     tls_trace("<<<< Client CipherSpec\n");
     if (tls_record_recv(record, recordlen, conn->sock) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
@@ -402,8 +403,7 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
         return -1;
     }
     // 创建的缓冲区，需要手动设置协议版本号。
-    finished[1] = record[1];
-    finished[2] = record[2];
+    tls_record_set_version(finished, TLS_version_tlcp);
     if (tls_record_set_handshake_finished(finished, &finishedlen, verify_data) != 1) {
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         error_print();
@@ -859,5 +859,57 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
     }
     sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
 
+    return 1;
+}
+
+
+int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
+    SM3_CTX tmp_sm3_ctx;
+    uint8_t sm3_hash[32];
+    uint8_t verify_data[12];
+    uint8_t finished[256];
+    size_t  finishedlen;
+
+    tls_trace(">>>> [ChangeCipherSpec]\n");
+    if (tls_record_set_change_cipher_spec(record, recordlen) != 1) {
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    // tls_record_print(stderr, record, recordlen, 0, 0);
+
+    tls_trace(">>>> Finished\n");
+    memcpy(&tmp_sm3_ctx, conn->_sm3_ctx, sizeof(SM3_CTX));
+    sm3_finish(&tmp_sm3_ctx, sm3_hash);
+
+    if (tls_prf(conn->_master_secret, 48, "client finished",
+                sm3_hash, 32, NULL, 0,
+                sizeof(verify_data), verify_data) != 1) {
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    // 设置缓冲区消息的协议版本号
+    tls_record_set_version(finished, TLS_version_tlcp);
+    if (tls_record_set_handshake_finished(finished, &finishedlen, verify_data) != 1) {
+        error_print();
+        return -1;
+    }
+    // tls_record_print(stderr, finished, finishedlen, 0, 0);
+    sm3_update(conn->_sm3_ctx, finished + 5, finishedlen - 5);
+
+    if (tls_record_encrypt(&conn->_client_write_mac_ctx, &conn->_client_write_enc_key,
+                           conn->_client_seq_num, finished, finishedlen, record, recordlen) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_decode_error);
+        return -1;
+    }
+    tls_seq_num_incr(conn->_client_seq_num);
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
     return 1;
 }
