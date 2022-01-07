@@ -367,9 +367,14 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     if (need_auth == 1){
         // TODO: 证书验证消息
     }
-    // 密钥变更和finished
-
-
+    // 发送客户端 密钥变更和 生成finished
+    if (tlcp_socket_write_client_spec_finished(conn, record, &recordlen) != 1){
+        return -1;
+    }
+    // 接收服务端 密钥变更熊和 验证finished
+    if (tlcp_socket_read_server_spec_finished(conn, record, &recordlen) != 1){
+        return -1;
+    }
     conn->_sm3_ctx = NULL;
     return 1;
 }

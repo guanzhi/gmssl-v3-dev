@@ -913,3 +913,65 @@ int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
     }
     return 1;
 }
+
+int tlcp_socket_read_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
+    uint8_t verify_data[12]       = {0};
+    uint8_t local_verify_data[12] = {0};
+    uint8_t sm3_hash[32]          = {0};
+    uint8_t finished[256]         = {0};
+    size_t  finishedlen;
+    // 设置缓冲区消息的协议版本号
+    tls_record_set_version(finished, TLS_version_tlcp);
+
+    tls_trace("<<<< [ChangeCipherSpec]\n");
+    if (tls_record_recv(record, recordlen, conn->sock) != 1
+        || tls_record_version(record) != TLS_version_tlcp) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_handshake_failure);
+        return -1;
+    }
+    if (tls_record_get_change_cipher_spec(record) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+
+    tls_trace("<<<< Finished\n");
+    if (tls_record_recv(record, recordlen, conn->sock) != 1
+        || tls_record_version(record) != TLS_version_tlcp) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_handshake_failure);
+        return -1;
+    }
+    // 解密finished消息
+    if (tls_record_decrypt(&conn->_server_write_mac_ctx, &conn->_server_write_enc_key,
+                           conn->_server_seq_num, record, *recordlen, finished, &finishedlen) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    tls_seq_num_incr(conn->_server_seq_num);
+    // 获取finished消息中的 验证数据 verify_data
+    if (tls_record_get_handshake_finished(finished, verify_data) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_handshake_failure);
+        return -1;
+    }
+    // 通过计算之前的消息，生成本地的验证数据
+    sm3_finish(conn->_sm3_ctx, sm3_hash);
+    if (tls_prf(conn->_master_secret, 48, "server finished",
+                sm3_hash, 32, NULL, 0,
+                sizeof(local_verify_data), local_verify_data) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    if (memcmp(local_verify_data, verify_data, 12) != 0) {
+        error_puts("server_finished.verify_data verification failure");
+        tlcp_socket_alert(conn, TLS_alert_handshake_failure);
+        return -1;
+    }
+
+    tls_trace("++++ Connection established\n");
+    return 1;
+}
