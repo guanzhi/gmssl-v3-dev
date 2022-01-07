@@ -138,6 +138,9 @@ typedef struct {
 #define TLCP_SOCKET_CLIENT_END 1
 #define TLCP_SOCKET_DEFAULT_FRAME_SIZE 4096
 
+#define TLCP_SOCKET_CONNECTED 0     // 成功建立TLCP Socket连接
+#define TLCP_SOCKET_UNCONNECTED 1   // 未建立TLCP Socket连接
+
 /**
  * TLCP SOCKET连接
  *
@@ -154,6 +157,7 @@ typedef struct {
     uint8_t session_id[32];     // 会话ID
 
     uint8_t entity;                     // 0 - server, 1 - client
+    uint8_t connected;                  // 0 - 未连接; 1 - 已经建立连接
     uint8_t hash_size;                  // HASH分组长度
     uint8_t key_material_length;        // 对称密钥长度
     uint8_t fixed_iv_length;            // IV长度
@@ -223,22 +227,26 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn);
 /**
  * 从TLCP连接中解密校验读取数据
  *
- * @param conn [in] TCLP连接
- * @param buf  [out] 读取数据缓冲区
- * @param len  [out] [in,out] 输入缓冲区长度，输出读取到数据长度
- * @return 1 - 成功；-1 - 失败，并存储错误代码errno
+ * 设计参考: unistd.h write()
+ *
+ * @param conn      [in] TCLP连接
+ * @param buf       [out] 读取数据缓冲区
+ * @param count     [in] 缓冲区长度
+ * @return 成功时返回读取字节数；失败时返回-1，并存储错误代码errno
  */
-int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len);
+ssize_t TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count);
 
 /**
  * 向TLCP连接中加密验证写入数据
  *
- * @param conn [in] TCLP连接
- * @param data  [in] 读取数据缓冲区
- * @param datalen  [in] 读取数据长度
- * @return 1 - 成功；-1 - 失败，并存储错误代码errno
+ * 设计参考: unistd.h read
+ *
+ * @param conn      [in] TCLP连接
+ * @param buf       [in] 待写入数据
+ * @param count     [in] 待写入数据数量（字节）
+ * @return 成功时返回写入字节数；失败时返回-1，并存储错误代码errno
  */
-int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen);
+ssize_t TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count);
 
 /**
  * 连接TLCP服务端，并进行TLCP握手
@@ -266,7 +274,7 @@ void TLCP_SOCKET_Connect_Close(TLCP_SOCKET_CONNECT *conn);
  * @param sm2_key       [in] SM2私钥指针
  * @return 1 - 连接成功；-1 - 连接失败
  */
-int TLCP_SOCKET_gmssl_key(TLCP_SOCKET_KEY *socket_key, X509_CERTIFICATE *cert, SM2_KEY *sm2_key);
+int TLCP_SOCKET_GMSSL_Key(TLCP_SOCKET_KEY *socket_key, X509_CERTIFICATE *cert, SM2_KEY *sm2_key);
 
 #ifdef  __cplusplus
 }

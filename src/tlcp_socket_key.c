@@ -76,7 +76,7 @@ static int gmssl_sm2_signer(void *ctx, uint8_t *msg, size_t msglen, uint8_t *sig
 static int gmssl_sm2_decrypter(void *ctx, uint8_t *ciphertext, size_t ciphertext_len,
                                uint8_t *plaintext, size_t *plaintext_len);
 
-int TLCP_SOCKET_gmssl_key(TLCP_SOCKET_KEY *socket_key, X509_CERTIFICATE *cert, SM2_KEY *sm2_key) {
+int TLCP_SOCKET_GMSSL_Key(TLCP_SOCKET_KEY *socket_key, X509_CERTIFICATE *cert, SM2_KEY *sm2_key) {
     if (sm2_key == NULL || cert == NULL || socket_key == NULL) {
         error_print();
         return -1;

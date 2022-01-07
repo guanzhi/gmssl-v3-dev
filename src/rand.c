@@ -61,5 +61,7 @@ int rand_bytes(uint8_t *buf, size_t len)
 		return -1;
 	}
 	fread(buf, 1, len, fp);
+    // 由于随机源也是文件，所以需要关闭，否则会造成 too many file open
+    fclose(fp);
 	return 1;
 }

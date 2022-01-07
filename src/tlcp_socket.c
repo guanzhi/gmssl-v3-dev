@@ -141,13 +141,14 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
 
     // 开始握手协议
     sm3_init(&sm3_ctx);
-    conn->_sm3_ctx = &sm3_ctx;
+    conn->_sm3_ctx  = &sm3_ctx;
+    conn->entity    = TLCP_SOCKET_SERVER_END;
+    conn->connected = TLCP_SOCKET_UNCONNECTED;
 
     tls_trace("<<<< ClientHello\n");
     if (tlcp_socket_read_client_hello(conn, record, &recordlen) != 1) {
         return -1;
     }
-
 
     tls_trace(">>>> ServerHello\n");
     if (tlcp_socket_write_server_hello(conn, ctx->rand, record, &recordlen) != 1) {
@@ -195,26 +196,18 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     if (tlcp_socket_write_server_spec_finished(conn, record, &recordlen) != 1) {
         return -1;
     }
-
-    conn->_sm3_ctx = NULL;
+    conn->connected = TLCP_SOCKET_CONNECTED;
+    conn->_sm3_ctx  = NULL;
     return 1;
 }
 
-/**
- * 从TLCP连接中解密校验读取数据
- *
- * @param conn [in] TCLP连接
- * @param buf  [out] 读取数据缓冲区
- * @param len  [in,out] 输入缓冲区长度，输出读取到数据长度
- * @return 1 - 读取成功；-1 - 失败，并存储错误代码errno
- */
-int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
+ssize_t TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
     size_t n = 0;
     if (conn == NULL || conn->sock <= 0) {
         return 0;
     }
 
-    if (buf == NULL || *len <= 0) {
+    if (buf == NULL || count <= 0) {
         error_puts("illegal parameter buf");
         return 0;
     }
@@ -229,7 +222,7 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
             switch (conn->record[0]) {
                 case TLS_alert_level_warning:
                     // 忽略错误继续读取
-//                    return TLCP_SOCKET_Read(conn, buf, len);
+//                    return TLCP_SOCKET_Read(conn, buf, count);
                 case TLS_alert_level_fatal:
                     if (conn->record[1] == TLS_alert_close_notify) {
                         return EOF;
@@ -243,54 +236,44 @@ int TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, uint8_t *buf, size_t *len) {
             }
         }
     }
-
-    if (*len > conn->_buf_remain) {
+    // 从读入的缓冲区中获取需要复制的数据数量
+    if (count > conn->_buf_remain) {
         n = conn->_buf_remain;
     } else {
-        n = *len;
+        n = count;
     }
-
+    // 从缓冲区中复制数据
     memcpy(buf, conn->_p, n);
-    // 调整数据偏移指针和剩余数据数量
+    // 缓冲区 偏移指针 和 剩余数据数量
     conn->_p += n;
     conn->_buf_remain -= n;
-    *len = n;
-    return 1;
+    return (ssize_t) n;
 }
 
-/**
- * 向TLCP连接中加密验证写入数据
- *
- * @param conn [in] TCLP连接
- * @param data  [in] 读取数据缓冲区
- * @param datalen  [in] 读取数据长度
- * @return 1 - 成功；-1 - 失败，并存储错误代码errno
- */
-int TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, uint8_t *data, size_t datalen) {
-    uint8_t *p     = data;
+ssize_t TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
+    uint8_t *p     = buf;
     size_t  offset = 0;
 
-    if (conn == NULL || data == NULL || datalen == 0) {
+    if (conn == NULL || buf == NULL || count == 0) {
         error_puts("illegal parameter");
         return -1;
     }
     // 分段发送
     for (;;) {
-        if (offset + TLCP_SOCKET_DEFAULT_FRAME_SIZE < datalen) {
+        if (offset + TLCP_SOCKET_DEFAULT_FRAME_SIZE < count) {
             if (tlcp_socket_write_record(conn, p, TLCP_SOCKET_DEFAULT_FRAME_SIZE) != 1) {
                 return -1;
             }
             offset += TLCP_SOCKET_DEFAULT_FRAME_SIZE;
-            p = data + offset;
+            p = buf + offset;
         } else {
-            if (tlcp_socket_write_record(conn, p, datalen - offset) != 1) {
+            if (tlcp_socket_write_record(conn, p, count - offset) != 1) {
                 return -1;
             }
             break;
         }
     }
-
-    return 1;
+    return (ssize_t) count;
 }
 
 
@@ -324,8 +307,9 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     }
 
     sm3_init(&sm3_ctx);
-    conn->_sm3_ctx = &sm3_ctx;
-    conn->entity   = TLCP_SOCKET_SERVER_END;
+    conn->_sm3_ctx  = &sm3_ctx;
+    conn->entity    = TLCP_SOCKET_CLIENT_END;
+    conn->connected = TLCP_SOCKET_UNCONNECTED;
     tls_record_set_version(record, TLS_version_tlcp);
 
     // 开始握手
@@ -364,18 +348,19 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     if (tlcp_socket_write_client_key_exchange(conn, record, &recordlen, &server_certs[1]) != 1) {
         return -1;
     }
-    if (need_auth == 1){
+    if (need_auth == 1) {
         // TODO: 证书验证消息
     }
     // 发送客户端 密钥变更和 生成finished
-    if (tlcp_socket_write_client_spec_finished(conn, record, &recordlen) != 1){
+    if (tlcp_socket_write_client_spec_finished(conn, record, &recordlen) != 1) {
         return -1;
     }
     // 接收服务端 密钥变更熊和 验证finished
-    if (tlcp_socket_read_server_spec_finished(conn, record, &recordlen) != 1){
+    if (tlcp_socket_read_server_spec_finished(conn, record, &recordlen) != 1) {
         return -1;
     }
-    conn->_sm3_ctx = NULL;
+    conn->connected = TLCP_SOCKET_CONNECTED;
+    conn->_sm3_ctx  = NULL;
     return 1;
 }
 
@@ -383,13 +368,21 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
 /**
  * 断开TLCP连接
  *
- * @param conn [in] 连接
+ * 关闭连接将会销毁连接过程中所有信息，包括密钥信息。
+ *
+ * @param conn [in,out] 连接
  */
 void TLCP_SOCKET_Connect_Close(TLCP_SOCKET_CONNECT *conn) {
-    if (conn != NULL) {
-        close(conn->sock);
-        // 将连接上下文中的工作密钥销毁
-        memset(conn, 0, sizeof(*conn));
+    // 如果连接对象存在，并且socket处于连接状态，那么关闭连接
+    if (conn != NULL && conn->sock != 0) {
+        if (conn->connected == TLCP_SOCKET_CONNECTED) {
+            // TCP socket 由alert内部关闭
+            tlcp_socket_alert(conn, TLS_alert_close_notify);
+        } else {
+            close(conn->sock);
+        }
     }
+    // 将连接上下文中的工作密钥销毁
+    memset(conn, 0, sizeof(*conn));
 }
 
