@@ -688,15 +688,15 @@ int tlcp_socket_read_server_certs(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *con
     }
     // 验证签名证书
     if (x509_certificate_verify_by_certificate(sign_cert, ca_cert) != 1) {
-        tlcp_socket_alert(conn, TLS_alert_bad_certificate);
         error_print();
+        tlcp_socket_alert(conn, TLS_alert_bad_certificate);
         return -1;
     }
 
     // 验证加密证书
     if (x509_certificate_verify_by_certificate(enc_cert, ca_cert) != 1) {
-        tlcp_socket_alert(conn, TLS_alert_bad_certificate);
         error_print();
+        tlcp_socket_alert(conn, TLS_alert_bad_certificate);
         return -1;
     }
     return 1;
@@ -751,6 +751,80 @@ int tlcp_socket_read_server_key_exchange(TLCP_SOCKET_CONNECT *conn,
     return 1;
 }
 
+/**
+ * 处理证书请求消息，并验证本地证书是否匹配
+ *
+ * 若本地证书不匹配，那么发出 TLS_alert_no_certificate 错误并关闭连接
+ *
+ * @param ctx [in] 上下文
+ * @param conn [in] 连接上下文
+ * @param record [in] 证书请求记录层消息
+ * @param recordlen [in] 消息长度
+ * @return  1 - 成功；-1 - 失败
+ */
+static int process_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                            uint8_t *record, size_t *recordlen) {
+
+    int    cert_types[TLS_MAX_CERTIFICATE_TYPES];
+    size_t cert_types_count;
+
+    uint8_t       ca_names[TLS_MAX_CA_NAMES_SIZE];
+    size_t        ca_names_len = 0;
+    const uint8_t *cap         = ca_names;
+    const uint8_t *dn          = ca_names;
+    size_t        dn_len       = 0;
+
+    uint8_t local_dn[256] = {0};
+    size_t  local_dn_len  = 0;
+    uint8_t *lp           = local_dn;
+
+
+    tls_trace("<<<< CertificateRequest\n");
+    if (tls_record_get_handshake_certificate_request(record,
+                                                     cert_types, &cert_types_count,
+                                                     ca_names, &ca_names_len) != 1) {
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        error_print();
+        return -1;
+    }
+    // read ServerHelloDone
+    if (tls_record_recv(record, recordlen, conn->sock) != 1
+        || tls_record_version(record) != TLS_version_tlcp) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+
+    // 检查证书、密钥是否存在
+    if (ctx->client_sig_key == NULL || ctx->client_sig_key->cert == NULL) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_no_certificate);
+        return -1;
+    }
+    if (x509_name_to_der(&ctx->client_sig_key->cert->tbs_certificate.issuer, &lp, &local_dn_len) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    // 证书是否与ca_names匹配
+    do {
+        if (tls_uint16array_from_bytes(&dn, &dn_len, &cap, &ca_names_len) != 1) {
+            // 无法解析  DN
+            return -1;
+        }
+        print_bytes(dn, dn_len);
+        print_bytes(local_dn, local_dn_len);
+        if (local_dn_len != dn_len) {
+            return -1;
+        }
+        if (memcpy(dn, local_dn, dn_len) == 0) {
+            return 1;
+        }
+    } while (ca_names_len > 0);
+
+    return -1;
+}
+
 int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                           uint8_t *record, size_t *recordlen,
                                           uint8_t *need_auth) {
@@ -758,10 +832,6 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
     int           type;
     const uint8_t *data;
     size_t        data_len;
-    int           cert_types[TLS_MAX_CERTIFICATE_TYPES];
-    size_t        cert_types_count;
-    uint8_t       ca_names[TLS_MAX_CA_NAMES_SIZE];
-    size_t        ca_names_len;
 
     if (tls_record_recv(record, recordlen, conn->sock) != 1
         || tls_record_version(record) != TLS_version_tlcp
@@ -773,23 +843,12 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
     sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     // 判断消息是否为证书请求
     if (type == TLS_handshake_certificate_request) {
-        tls_trace("<<<< CertificateRequest\n");
-        if (tls_record_get_handshake_certificate_request(record,
-                                                         cert_types, &cert_types_count,
-                                                         ca_names, &ca_names_len) != 1) {
-            tlcp_socket_alert(conn, TLS_alert_internal_error);
-            error_print();
+        // 处理证书请求消息，并验证本地证书是否匹配
+        if (process_cert_req(ctx, conn, record, recordlen) != 1) {
             return -1;
         }
-        if (tls_record_recv(record, recordlen, conn->sock) != 1
-            || tls_record_version(record) != TLS_version_tlcp) {
-            error_print();
-            return -1;
-        }
-        sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
         // 需要客户端认证
         *need_auth = 1;
-        // TODO: 检查证书、密钥是否存在，证书是否与ca_names匹配。
     }
     tls_trace("<<<< ServerHelloDone\n");
     if (tls_record_get_handshake_server_hello_done(record) != 1) {

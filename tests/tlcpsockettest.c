@@ -49,6 +49,20 @@ MIuWxdAQ71kwT95+0fvm9VuuCOpusHgbDWJanyZBnAIgTIXAkehTXPLYXjYJ/uVE\n\
 4DdAQJFVrWNugK3eiDgECMc=\n\
 -----END CERTIFICATE-----";
 
+static uint8_t authcert_str[] = "-----BEGIN CERTIFICATE-----\n\
+MIICADCCAaWgAwIBAgIIAs5czZZPpv4wCgYIKoEcz1UBg3UwQjELMAkGA1UEBhMC\n\
+Q04xDzANBgNVBAgMBua1meaxnzEPMA0GA1UEBwwG5p2t5beeMREwDwYDVQQKDAjm\n\
+tYvor5VDQTAeFw0yMjAxMDcwNTM4MTBaFw0yMzAxMDcwNTM4MTBaMGcxCzAJBgNV\n\
+BAYTAkNOMQ8wDQYDVQQIDAbmtZnmsZ8xDzANBgNVBAcMBuadreW3njEPMA0GA1UE\n\
+CgwG5rWL6K+VMQ8wDQYDVQQLDAbmtYvor5UxFDASBgNVBAMMC+WuouaIt+errzAx\n\
+MFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAEfjd+8UWsZh/mOtbOV7vtCwJCqSda\n\
+abwljsV6mZH7Ugbp7Zx3nTRGE0L2WXGQaOe/78Ph2kErp/WGrJUNRVUbwaNgMF4w\n\
+DgYDVR0PAQH/BAQDAgbAMAwGA1UdEwEB/wQCMAAwHQYDVR0OBBYEFBiDmyfgvxB7\n\
+TeH0OZez3Cod88iaMB8GA1UdIwQYMBaAFDaT4xTnRQn61e/qLxIt06GWPMKkMAoG\n\
+CCqBHM9VAYN1A0kAMEYCIQDxELAl+/+puw6/qp9D8ZzwtqXw9W3YKOGS1zRVzJJF\n\
+VQIhAOMUyOxCdqvM0xwh9QyfPunnzOzKa4HP3RrFDxDqXYC/\n\
+-----END CERTIFICATE-----";
+
 static uint8_t sigkey_str[] = "-----BEGIN EC PRIVATE KEY-----\n\
 MIGTAgEAMBMGByqGSM49AgEGCCqBHM9VAYItBHkwdwIBAQQgmfgsjOI+jhOcwu7f\n\
 Cy6PYSYBmjAzTijLaJicJorUEsmgCgYIKoEcz1UBgi2hRANCAAQJTFguoSNb/TEX\n\
@@ -63,84 +77,119 @@ PneT7HCsddelUAcy7WMxXECj3iPA14rNqw3U+waxmvIsXRdYmrQ/k8k+ZJjM+CX9\n\
 RukDTWHi\n\
 -----END EC PRIVATE KEY-----";
 
+static uint8_t authkey_str[] = "-----BEGIN PRIVATE KEY-----\n\
+MIGTAgEAMBMGByqGSM49AgEGCCqBHM9VAYItBHkwdwIBAQQgcuCN3FyCvaM+XZ9L\n\
+xBdBYxtPPBT6Zcb22c5Ho5EiD9agCgYIKoEcz1UBgi2hRANCAAR+N37xRaxmH+Y6\n\
+1s5Xu+0LAkKpJ1ppvCWOxXqZkftSBuntnHedNEYTQvZZcZBo57/vw+HaQSun9Yas\n\
+lQ1FVRvB\n\
+-----END PRIVATE KEY-----";
+
+
 static X509_CERTIFICATE cacert;
 static X509_CERTIFICATE sigcert;
 static X509_CERTIFICATE enccert;
+static X509_CERTIFICATE authcert;
 static SM2_KEY          sigkey;
 static SM2_KEY          enckey;
+static SM2_KEY          authkey;
 
+/**
+ * 加载测试用使用的证书和密钥对
+ */
 static int load_cert_keys();
 
+/**
+ * TLCP服务器 HTTP测试
+ */
 static void handle_http(TLCP_SOCKET_CONNECT *conn);
 
-static void handle_read_write(TLCP_SOCKET_CONNECT *conn);
+/**
+ * TLCP服务器 回音测试
+ */
+static void handle_echo(TLCP_SOCKET_CONNECT *conn);
 
+/**
+ * TLCP客户端 连接读写回音测试
+ */
 static void client_conn_test();
+/**
+ * TLCP客户端 双向身份认证测试
+ */
+static void client_auth_test();
+
+/**
+ * 运行TLCP服务端
+ */
+static void server_test();
 
 int main(void) {
-//    TLCP_SOCKET_CTX     ctx;
-//    TLCP_SOCKET_KEY     socket_sigkey;
-//    TLCP_SOCKET_KEY     socket_enckey;
-//    TLCP_SOCKET_CONNECT conn;
-
     // 加载证书和相关密钥
     if (load_cert_keys() != 1) {
-        return -1;
+        error_puts("cert and key load fail.");
+        return 1;
     }
-    client_conn_test();
+//    server_test();
+//    client_conn_test();
+    client_auth_test();
 
-//    // 创建SOCKET使用的密钥对
-//    if (TLCP_SOCKET_GMSSL_Key(&socket_sigkey, &sigcert, &sigkey) != 1) {
-//        return -1;
-//    }
-//    if (TLCP_SOCKET_GMSSL_Key(&socket_enckey, &enccert, &enckey) != 1) {
-//        return -1;
-//    }
-//    // 初始化上下文
-//    ctx.rand           = rand_bytes;
-//    ctx.server_sig_key = &socket_sigkey;
-//    ctx.server_enc_key = &socket_enckey;
-//    // 打开端口监听TLCP连接
-//    if (TLCP_SOCKET_Listen(&ctx, 30443) != 1) {
-//        return -1;
-//    }
-//    for (;;) {
-//        if (TLCP_SOCKET_Accept(&ctx, &conn) != 1) {
-//            error_print();
-//            break;
-//        }
-////        handle_http(&conn);
-//        handle_read_write(&conn);
-//        TLCP_SOCKET_Connect_Close(&conn);
-//    }
-//    // 关闭连接
-//    TLCP_SOCKET_Close(&ctx);
+    return 1;
 }
 
-// 测试数据的读写
-static void handle_read_write(TLCP_SOCKET_CONNECT *conn) {
+static void server_test() {
+    TLCP_SOCKET_CTX     ctx           = {0};
+    TLCP_SOCKET_KEY     socket_sigkey = {0};
+    TLCP_SOCKET_KEY     socket_enckey = {0};
+    TLCP_SOCKET_CONNECT conn          = {0};
+
+    // 创建SOCKET使用的密钥对
+    if (TLCP_SOCKET_GMSSL_Key(&socket_sigkey, &sigcert, &sigkey) != 1) {
+        error_puts("sig key create fail.");
+        return;
+    }
+    if (TLCP_SOCKET_GMSSL_Key(&socket_enckey, &enccert, &enckey) != 1) {
+        error_puts("enc key create fail.");
+        return;
+    }
+    // 初始化上下文
+    ctx.rand           = rand_bytes;
+    ctx.server_sig_key = &socket_sigkey;
+    ctx.server_enc_key = &socket_enckey;
+    // 打开端口监听TLCP连接
+    if (TLCP_SOCKET_Listen(&ctx, 30443) != 1) {
+        perror("TLCP server listen fail");
+        return;
+    }
+    for (;;) {
+        if (TLCP_SOCKET_Accept(&ctx, &conn) != 1) {
+            perror("TLCP server Accept fail");
+            return;
+        }
+//        handle_http(&conn);
+        handle_echo(&conn);
+        TLCP_SOCKET_Connect_Close(&conn);
+    }
+    // 关闭连接
+    TLCP_SOCKET_Close(&ctx);
+}
+
+
+static void handle_echo(TLCP_SOCKET_CONNECT *conn) {
     size_t  n                        = 0;
     uint8_t buf[TLS_MAX_RECORD_SIZE] = {0};
-    uint8_t resp[1024 * 1024]        = {0};
-    size_t  i                        = 0;
 
-    n      = sizeof(buf);
-    if ((n = TLCP_SOCKET_Read(conn, buf, n)) < 0) {
-        error_print();
-        return;
-    }
-    printf("%s\n", buf);
-    n      = TLCP_SOCKET_DEFAULT_FRAME_SIZE * 5 + 1;
-    for (i = 0; i < n; ++i) {
-        resp[i] = 'A';
-    }
-    if ((n = TLCP_SOCKET_Write(conn, resp, n)) < 0) {
-        error_print();
-        return;
+    n = sizeof(buf);
+    for (;;) {
+        if ((n = TLCP_SOCKET_Read(conn, buf, n)) < 0) {
+            error_print();
+            return;
+        }
+        if ((n = TLCP_SOCKET_Write(conn, buf, n)) < 0) {
+            error_print();
+            return;
+        }
     }
 }
 
-// 测试HTTP服务器
 static void handle_http(TLCP_SOCKET_CONNECT *conn) {
     size_t  n                        = 0;
     uint8_t buf[TLS_MAX_RECORD_SIZE] = {0};
@@ -149,6 +198,7 @@ Content-Length: 6\r\n\
 Content-Type: text/plain; charset=utf-8\r\n\
 \r\n\
 Hello!";
+
     n      = sizeof(buf);
     if ((n = TLCP_SOCKET_Read(conn, buf, n)) < 0) {
         error_print();
@@ -174,6 +224,10 @@ static int load_cert_keys() {
         error_print();
         return -1;
     }
+    if (x509_certificate_from_bytes(&authcert, authcert_str, strlen(authcert_str)) != 1) {
+        error_print();
+        return -1;
+    }
     if (sm2_private_key_from_str_pem(&sigkey, sigkey_str, strlen(sigkey_str)) != 1) {
         error_print();
         return -1;
@@ -182,31 +236,32 @@ static int load_cert_keys() {
         error_print();
         return -1;
     }
+    if (sm2_private_key_from_str_pem(&authkey, authkey_str, strlen(authkey_str)) != 1) {
+        error_print();
+        return -1;
+    }
     return 1;
 }
 
 #define BUFFER_SIZE 4096
 
-/**
- * 客户端连接读写测试
- */
+
 static void client_conn_test() {
-    TLCP_SOCKET_CTX     ctx = {0};
-    TLCP_SOCKET_CONNECT conn;
-    int                 ret = 1;
+    TLCP_SOCKET_CTX     ctx               = {0};
+    TLCP_SOCKET_CONNECT conn              = {0};
+    int                 ret               = 1;
+    uint8_t             send[BUFFER_SIZE] = {0};
+    uint8_t             recv[BUFFER_SIZE] = {0};
+    size_t              n                 = BUFFER_SIZE;
+    size_t              rd                = 0;
+    uint8_t             *p                = 0;
 
     ctx.root_certs    = &cacert;
     ctx.root_cert_len = 1;
-    uint8_t send[BUFFER_SIZE] = {0};
-    uint8_t recv[BUFFER_SIZE] = {0};
+    errno                                 = 0;
 
-    size_t  n                 = BUFFER_SIZE;
-    size_t  rd                = 0;
-    uint8_t *p                = 0;
-
-    errno                   = 0;
     // 拨号连接服务端
-    ret = TLCP_SOCKET_Dial(&ctx, &conn, "127.0.0.1", 7777);
+    ret = TLCP_SOCKET_Dial(&ctx, &conn, "127.0.0.1", 30443);
     if (ret != 1) {
         error_print();
         return;
@@ -225,8 +280,8 @@ static void client_conn_test() {
         // print_bytes(send, n);
 
         // 不断读取数据直到满足长度
-        rd     = 0;
-        p      = recv;
+        rd = 0;
+        p  = recv;
         do {
             if ((n = TLCP_SOCKET_Read(&conn, p, BUFFER_SIZE - rd)) < 0) {
                 perror("TLCP_SOCKET_Read() ERROR");
@@ -242,7 +297,50 @@ static void client_conn_test() {
             perror("Write Read Different!");
             break;
         }
+        break;
     }
     TLCP_SOCKET_Connect_Close(&conn);
 
+}
+
+static void client_auth_test() {
+    TLCP_SOCKET_CTX     ctx        = {0};
+    TLCP_SOCKET_CONNECT conn       = {0};
+    TLCP_SOCKET_KEY     client_key = {0};
+    int                 ret        = 1;
+    uint8_t             buff[16]   = {0};
+    ssize_t             n          = 16;
+    size_t              i          = 0;
+    errno                          = 0;
+
+
+
+    if (TLCP_SOCKET_GMSSL_Key(&client_key, &authcert, &authkey) == -1) {
+        perror("TLCP_SOCKET_GMSSL_Key() ERROR");
+        return;
+    }
+    ctx.root_certs    = &cacert;
+    ctx.root_cert_len = 1;
+    ctx.client_sig_key = &client_key;
+
+    for (i = 0; i < n; ++i) {
+        buff[i] = i;
+    }
+    // 拨号连接服务端
+    ret = TLCP_SOCKET_Dial(&ctx, &conn, "127.0.0.1", 30443);
+    if (ret != 1) {
+        error_print();
+        return;
+    }
+
+    if ((n = TLCP_SOCKET_Write(&conn, buff, n)) < 0) {
+        perror("TLCP_SOCKET_Write() ERROR");
+        return;
+    }
+    if ((n = TLCP_SOCKET_Read(&conn, buff, n)) < 0) {
+        perror("TLCP_SOCKET_Read() ERROR");
+        return;
+    }
+    print_bytes(buff, n);
+    TLCP_SOCKET_Connect_Close(&conn);
 }
