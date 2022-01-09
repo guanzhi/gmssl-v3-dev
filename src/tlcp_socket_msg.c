@@ -801,23 +801,22 @@ static int process_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
         tlcp_socket_alert(conn, TLS_alert_no_certificate);
         return -1;
     }
+    // 解析当前签名证书信息
     if (x509_name_to_der(&ctx->client_sig_key->cert->tbs_certificate.issuer, &lp, &local_dn_len) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
     }
-    // 证书是否与ca_names匹配
+    // 查找与本地证书匹配的 服务器证书
     do {
         if (tls_uint16array_from_bytes(&dn, &dn_len, &cap, &ca_names_len) != 1) {
             // 无法解析  DN
             return -1;
         }
-        print_bytes(dn, dn_len);
-        print_bytes(local_dn, local_dn_len);
         if (local_dn_len != dn_len) {
             return -1;
         }
-        if (memcpy(dn, local_dn, dn_len) == 0) {
+        if (memcmp(dn, local_dn, dn_len) == 0) {
             return 1;
         }
     } while (ca_names_len > 0);
