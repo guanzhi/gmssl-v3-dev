@@ -118,22 +118,26 @@ int sm2_signature_to_der(const SM2_SIGNATURE *sig, uint8_t **out, size_t *outlen
 
 int sm2_signature_from_der(SM2_SIGNATURE *sig, const uint8_t **in, size_t *inlen)
 {
-	const uint8_t *data, *r, *s;
-	size_t datalen, rlen, slen;
+    const uint8_t *data, *r, *s;
+    size_t        datalen, rlen, slen;
+    uint8_t       offset = 0;
 
-	if (asn1_sequence_from_der(&data, &datalen, in, inlen) < 0
-		|| asn1_integer_from_der(&r, &rlen, &data, &datalen) < 0
-		|| asn1_integer_from_der(&s, &slen, &data, &datalen) < 0
-		|| datalen > 0) {
-		return -1;
-	}
-	if (rlen != 32 || slen != 32) {
-		return -2;
-	}
-
-	memcpy(sig->r, r, 32);
-	memcpy(sig->s, s, 32);
-	return 1;
+    if (asn1_sequence_from_der(&data, &datalen, in, inlen) < 0
+        || asn1_integer_from_der(&r, &rlen, &data, &datalen) < 0
+        || asn1_integer_from_der(&s, &slen, &data, &datalen) < 0
+        || datalen > 0) {
+        return -1;
+    }
+    if (rlen > 32 || slen > 32) {
+        return -2;
+    }
+    // DER格式不含前置0，对于长度不足32时需要补足前缀0
+    memset(sig, 0, sizeof(SM2_SIGNATURE));
+    offset = 32 - rlen;
+    memcpy((sig->r) + offset, r, 32);
+    offset = 32 - slen;
+    memcpy((sig->s) + offset, s, 32);
+    return 1;
 }
 
 /*

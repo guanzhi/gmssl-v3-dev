@@ -354,7 +354,6 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
     }
     if (tls_record_get_change_cipher_spec(record) != 1) {
         error_print();
-        tlcp_socket_alert(conn, TLS_alert_unexpected_message);
         return -1;
     }
 
@@ -1015,7 +1014,6 @@ int tlcp_socket_read_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
     }
     if (tls_record_get_change_cipher_spec(record) != 1) {
         error_print();
-        tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
     }
 
