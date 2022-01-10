@@ -298,6 +298,29 @@ int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
  */
 int tlcp_socket_read_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
+/**
+ * 写入客户端认证证书
+ *
+ * @param ctx                   [in] 上下文
+ * @param conn                  [in] socket连接
+ * @param record                [in,out] 记录层数据
+ * @param recordlen             [in,out] 记录层数据长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                         uint8_t *record, size_t *recordlen);
+
+/**
+ * 生成客户端证书验证消息并发送
+ *
+ * @param ctx                   [in] 上下文
+ * @param conn                  [in] socket连接
+ * @param record                [in,out] 记录层数据
+ * @param recordlen             [in,out] 记录层数据长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                         uint8_t *record, size_t *recordlen);
 #ifdef  __cplusplus
 }
 #endif

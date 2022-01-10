@@ -1033,3 +1033,41 @@ int tlcp_socket_read_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
     tls_trace("++++ Connection established\n");
     return 1;
 }
+
+
+int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                         uint8_t *record, size_t *recordlen) {
+
+    int     type     = TLS_handshake_certificate;
+    uint8_t *data    = record + 5 + 4;
+    uint8_t *certs   = data + 3;
+    size_t  datalen  = 0;
+    size_t  certslen = 0;
+    uint8_t der[1024];
+    uint8_t *cp      = der;
+    size_t  derlen   = 0;
+
+    // 序列化签名证书DER
+    if (x509_certificate_to_der(ctx->client_sig_key->cert, &cp, &derlen) != 1) {
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        error_print();
+        return -1;
+    }
+    tls_uint24array_to_bytes(der, derlen, &certs, &certslen);
+
+    datalen = certslen;
+    tls_uint24_to_bytes((uint24_t) certslen, &data, &datalen);
+    tls_record_set_handshake(record, recordlen, type, NULL, datalen);
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+    return 1;
+}
+
+int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                                         uint8_t *record, size_t *recordlen){
+    // TODO:
+    return 1;
+}

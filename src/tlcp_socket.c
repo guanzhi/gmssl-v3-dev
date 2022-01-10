@@ -340,16 +340,21 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     if (tlcp_socket_read_cert_req_server_done(ctx, conn, record, &recordlen, &need_auth) != 1) {
         return -1;
     }
-
     if (need_auth == 1) {
-        // TODO: 客户端身份认证
+        // 客户端身份认证，发送客户端认证证书
+        if (tlcp_socket_write_client_certificate(ctx, conn, record, &recordlen) != 1) {
+            return -1;
+        }
     }
     tls_trace(">>>> ClientKeyExchange\n");
     if (tlcp_socket_write_client_key_exchange(conn, record, &recordlen, &server_certs[1]) != 1) {
         return -1;
     }
     if (need_auth == 1) {
-        // TODO: 证书验证消息
+        // 生成并发送证书验证消息
+        if (tlcp_socket_write_client_cert_verify(ctx, conn, record, &recordlen)!= 1){
+            return -1;
+        }
     }
     // 发送客户端 密钥变更和 生成finished
     if (tlcp_socket_write_client_spec_finished(conn, record, &recordlen) != 1) {
