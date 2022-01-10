@@ -1067,7 +1067,46 @@ int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
 }
 
 int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                         uint8_t *record, size_t *recordlen){
-    // TODO:
+                                         uint8_t *record, size_t *recordlen) {
+    SM3_CTX         tmp_sm3_ctx;
+    TLCP_SOCKET_KEY *sig_key                               = ctx->client_sig_key;
+    uint8_t         sig[TLS_MAX_SIGNATURE_SIZE]            = {0};
+    size_t          siglen                                 = sizeof(sig);
+    uint8_t         msg[SM3_DIGEST_SIZE]                   = {0};
+    uint8_t         sig_vector[TLS_MAX_SIGNATURE_SIZE + 2] = {0};           // 签名向量
+    uint8_t         *p                                     = sig_vector;    // 向量指针
+    size_t          sig_vector_len                         = 0;
+
+
+    memcpy(&tmp_sm3_ctx, conn->_sm3_ctx, sizeof(SM3_CTX));
+    sm3_finish(&tmp_sm3_ctx, msg);
+    /*
+     * from GBT38636 6.4.5.6
+     *
+     * case ecc_sm3: // 当ECC为SM2算法时，用这个套件
+     *  digitally-signed struct{
+     *      opaque sm3_hash[32];
+     *  }
+     * sm3_hash 是指hash运行的结果，运算的内容时客户端hello消息开始
+     * 直到本消息（不包括本消息）的所有与握手有关的消息，包括握手消息
+     * 的类型和长度域。
+     */
+    if (sig_key->signer(sig_key->ctx, msg, SM3_DIGEST_SIZE, sig, &siglen) != 1) {
+        error_puts("client signature fail");
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    // 签名值是一个向量
+    tls_uint16array_to_bytes(sig, siglen, &p, &sig_vector_len);
+    if (tls_record_set_handshake_certificate_verify(record, recordlen, sig_vector, sig_vector_len) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     return 1;
 }

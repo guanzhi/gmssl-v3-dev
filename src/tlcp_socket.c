@@ -351,6 +351,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
         return -1;
     }
     if (need_auth == 1) {
+        tls_trace(">>>> CertificateVerify\n");
         // 生成并发送证书验证消息
         if (tlcp_socket_write_client_cert_verify(ctx, conn, record, &recordlen)!= 1){
             return -1;

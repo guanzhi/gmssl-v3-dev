@@ -87,7 +87,7 @@ typedef int (*TLCP_SOCKET_RandBytes_FuncPtr)(uint8_t *buf, size_t len);
 /**
  * TLCP签名接口，用于实现签名
  *
- * @param ctx     [in] socket密钥上下文，该参数在每次调用该方法时传入，请根据情况在函数内部强制类型转换使用。
+ * @param ctx     [in] TLCP_SOCKET_KEY.ctx，该参数在每次调用该方法时传入，请根据情况在函数内部强制类型转换使用。
  * @param msg     [in] 待签名原文
  * @param msglen  [in] 待签名原文长度
  * @param sig     [out] 签名值
@@ -99,7 +99,7 @@ typedef int (*TLCP_SOCKET_Signer_FuncPtr)(void *ctx, uint8_t *msg, size_t msglen
 /**
  * TLCP解密接口，用于数据解密
  *
- * @param ctx             [in] socket密钥上下文，该参数在每次调用该方法时传入，请根据情况在函数内部强制类型转换使用。
+ * @param ctx             [in] TLCP_SOCKET_KEY.ctx，该参数在每次调用该方法时传入，请根据情况在函数内部强制类型转换使用。
  * @param ciphertext      [in] 密文
  * @param ciphertext_len  [in] 密文长度
  * @param plaintext       [out] 明文
@@ -119,17 +119,18 @@ typedef struct {
     X509_CERTIFICATE              *cert;     // 证书（公钥）
     TLCP_SOCKET_Signer_FuncPtr    signer;    // 密钥对的签名实现
     TLCP_SOCKET_Decrypter_FuncPtr decrypter; // 密钥对的解密实现
-}           TLCP_SOCKET_KEY;
+
+} TLCP_SOCKET_KEY;
 
 typedef struct {
-    TLCP_SOCKET_RandBytes_FuncPtr rand;     // 随机源
-    X509_CERTIFICATE              *root_certs;           // 根证书列表，客户端用于验证服务端证书，服务端用于验证客户端证书，如果为空表示不验证。
-    int                           root_cert_len;                      // 根证书数量
-    TLCP_SOCKET_KEY               *server_sig_key;        // 服务器签名密钥对
-    TLCP_SOCKET_KEY               *server_enc_key;        // 服务器加密密钥对
-    TLCP_SOCKET_KEY               *client_sig_key;        // 客户端认证密钥对
+    TLCP_SOCKET_RandBytes_FuncPtr rand;             // 随机源
+    X509_CERTIFICATE              *root_certs;      // 根证书列表，客户端用于验证服务端证书，服务端用于验证客户端证书，如果为空表示不验证。
+    int                           root_cert_len;    // 根证书数量
+    TLCP_SOCKET_KEY               *server_sig_key;  // 服务器签名密钥对
+    TLCP_SOCKET_KEY               *server_enc_key;  // 服务器加密密钥对
+    TLCP_SOCKET_KEY               *client_sig_key;  // 客户端认证密钥对
     // ##################### 私有 #####################
-    int                           _sock;              // Server SocketFD
+    int                           _sock;            // Server SocketFD
 
 } TLCP_SOCKET_CTX;
 

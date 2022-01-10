@@ -49,7 +49,7 @@ MIuWxdAQ71kwT95+0fvm9VuuCOpusHgbDWJanyZBnAIgTIXAkehTXPLYXjYJ/uVE\n\
 4DdAQJFVrWNugK3eiDgECMc=\n\
 -----END CERTIFICATE-----";
 
-static uint8_t authcert_str[] = "-----BEGIN CERTIFICATE-----\n\
+static uint8_t client_cert_str[] = "-----BEGIN CERTIFICATE-----\n\
 MIICADCCAaWgAwIBAgIIAs5czZZPpv4wCgYIKoEcz1UBg3UwQjELMAkGA1UEBhMC\n\
 Q04xDzANBgNVBAgMBua1meaxnzEPMA0GA1UEBwwG5p2t5beeMREwDwYDVQQKDAjm\n\
 tYvor5VDQTAeFw0yMjAxMDcwNTM4MTBaFw0yMzAxMDcwNTM4MTBaMGcxCzAJBgNV\n\
@@ -77,7 +77,7 @@ PneT7HCsddelUAcy7WMxXECj3iPA14rNqw3U+waxmvIsXRdYmrQ/k8k+ZJjM+CX9\n\
 RukDTWHi\n\
 -----END EC PRIVATE KEY-----";
 
-static uint8_t authkey_str[] = "-----BEGIN PRIVATE KEY-----\n\
+static uint8_t client_key_str[] = "-----BEGIN PRIVATE KEY-----\n\
 MIGTAgEAMBMGByqGSM49AgEGCCqBHM9VAYItBHkwdwIBAQQgcuCN3FyCvaM+XZ9L\n\
 xBdBYxtPPBT6Zcb22c5Ho5EiD9agCgYIKoEcz1UBgi2hRANCAAR+N37xRaxmH+Y6\n\
 1s5Xu+0LAkKpJ1ppvCWOxXqZkftSBuntnHedNEYTQvZZcZBo57/vw+HaQSun9Yas\n\
@@ -88,10 +88,10 @@ lQ1FVRvB\n\
 static X509_CERTIFICATE cacert;
 static X509_CERTIFICATE sigcert;
 static X509_CERTIFICATE enccert;
-static X509_CERTIFICATE authcert;
+static X509_CERTIFICATE client_cert;
 static SM2_KEY          sigkey;
 static SM2_KEY          enckey;
-static SM2_KEY          authkey;
+static SM2_KEY          client_key;
 
 /**
  * 加载测试用使用的证书和密钥对
@@ -112,6 +112,7 @@ static void handle_echo(TLCP_SOCKET_CONNECT *conn);
  * TLCP客户端 连接读写回音测试
  */
 static void client_conn_test();
+
 /**
  * TLCP客户端 双向身份认证测试
  */
@@ -224,7 +225,7 @@ static int load_cert_keys() {
         error_print();
         return -1;
     }
-    if (x509_certificate_from_bytes(&authcert, authcert_str, strlen(authcert_str)) != 1) {
+    if (x509_certificate_from_bytes(&client_cert, client_cert_str, strlen(client_cert_str)) != 1) {
         error_print();
         return -1;
     }
@@ -236,7 +237,7 @@ static int load_cert_keys() {
         error_print();
         return -1;
     }
-    if (sm2_private_key_from_str_pem(&authkey, authkey_str, strlen(authkey_str)) != 1) {
+    if (sm2_private_key_from_str_pem(&client_key, client_key_str, strlen(client_key_str)) != 1) {
         error_print();
         return -1;
     }
@@ -304,24 +305,23 @@ static void client_conn_test() {
 }
 
 static void client_auth_test() {
-    TLCP_SOCKET_CTX     ctx        = {0};
-    TLCP_SOCKET_CONNECT conn       = {0};
-    TLCP_SOCKET_KEY     client_key = {0};
-    int                 ret        = 1;
-    uint8_t             buff[16]   = {0};
-    ssize_t             n          = 16;
-    size_t              i          = 0;
-    errno                          = 0;
+    TLCP_SOCKET_CTX     ctx      = {0};
+    TLCP_SOCKET_CONNECT conn     = {0};
+    TLCP_SOCKET_KEY     key      = {0};
+    int                 ret      = 1;
+    uint8_t             buff[16] = {0};
+    ssize_t             n        = 16;
+    size_t              i        = 0;
+    errno                        = 0;
 
 
-
-    if (TLCP_SOCKET_GMSSL_Key(&client_key, &authcert, &authkey) == -1) {
+    if (TLCP_SOCKET_GMSSL_Key(&key, &client_cert, &client_key) == -1) {
         perror("TLCP_SOCKET_GMSSL_Key() ERROR");
         return;
     }
-    ctx.root_certs    = &cacert;
-    ctx.root_cert_len = 1;
-    ctx.client_sig_key = &client_key;
+    ctx.root_certs     = &cacert;
+    ctx.root_cert_len  = 1;
+    ctx.client_sig_key = &key;
 
     for (i = 0; i < n; ++i) {
         buff[i] = i;
