@@ -213,7 +213,7 @@ ssize_t TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
     }
 
     if (conn->_buf_remain == 0) {
-        if (tlcp_socket_read_record(conn) == -1) {
+        if (tlcp_socket_read_app_data(conn) == -1) {
             error_print();
             return 0;
         }
@@ -261,13 +261,13 @@ ssize_t TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
     // 分段发送
     for (;;) {
         if (offset + TLCP_SOCKET_DEFAULT_FRAME_SIZE < count) {
-            if (tlcp_socket_write_record(conn, p, TLCP_SOCKET_DEFAULT_FRAME_SIZE) != 1) {
+            if (tlcp_socket_write_app_data(conn, p, TLCP_SOCKET_DEFAULT_FRAME_SIZE) != 1) {
                 return -1;
             }
             offset += TLCP_SOCKET_DEFAULT_FRAME_SIZE;
             p = buf + offset;
         } else {
-            if (tlcp_socket_write_record(conn, p, count - offset) != 1) {
+            if (tlcp_socket_write_app_data(conn, p, count - offset) != 1) {
                 return -1;
             }
             break;
@@ -353,7 +353,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     if (need_auth == 1) {
         tls_trace(">>>> CertificateVerify\n");
         // 生成并发送证书验证消息
-        if (tlcp_socket_write_client_cert_verify(ctx, conn, record, &recordlen)!= 1){
+        if (tlcp_socket_write_client_cert_verify(ctx, conn, record, &recordlen) != 1) {
             return -1;
         }
     }
@@ -370,6 +370,52 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     return 1;
 }
 
+/**
+ * 发送关闭消息
+ *
+ * 根据握手状态，决定是否加密消息
+ *
+ * socket连接应该由调用负责关闭
+ *
+ * @param conn [in] 连接状态
+ */
+static void tlcp_socket_send_close_alert(TLCP_SOCKET_CONNECT *conn) {
+    const SM3_HMAC_CTX *hmac_ctx;
+    const SM4_KEY      *enc_key;
+    uint8_t            *seq_num;
+    uint8_t            mrec[8 + 8];     // 记录层明文 (头6B)
+    uint8_t            crec[8 + 128];   // 记录层密码文 （头+加密填充和IV+MAC）
+    size_t             mlen = sizeof(mrec);
+    size_t             clen = sizeof(crec);
+
+    // 设置消息
+    if (tls_record_set_version(mrec, conn->version) != 1
+        || tls_record_set_alert(mrec, &mlen, TLS_alert_level_warning, TLS_alert_close_notify) != 1) {
+        return;
+    }
+    if (conn->connected == TLCP_SOCKET_CONNECTED) {
+        // 已经握手成功的情况，close消息需要被加密
+        if (conn->entity == TLCP_SOCKET_CLIENT_END) {
+            hmac_ctx = &conn->_client_write_mac_ctx;
+            enc_key  = &conn->_client_write_enc_key;
+            seq_num  = conn->_client_seq_num;
+        } else {
+            hmac_ctx = &conn->_server_write_mac_ctx;
+            enc_key  = &conn->_server_write_enc_key;
+            seq_num  = conn->_server_seq_num;
+        }
+        if (tls_record_encrypt(hmac_ctx, enc_key, seq_num, mrec, mlen, crec, &clen) != 1
+            || tls_seq_num_incr(seq_num) != 1
+            || tls_record_send(crec, clen, conn->sock) != 1) {
+            error_print();
+            return;
+        }
+    } else {
+        // 没有握手的情况直接明文发送
+        tls_record_send(mrec, mlen, conn->sock);
+    }
+}
+
 
 /**
  * 断开TLCP连接
@@ -381,14 +427,14 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
 void TLCP_SOCKET_Connect_Close(TLCP_SOCKET_CONNECT *conn) {
     // 如果连接对象存在，并且socket处于连接状态，那么关闭连接
     if (conn != NULL && conn->sock != 0) {
-        if (conn->connected == TLCP_SOCKET_CONNECTED) {
-            // TCP socket 由alert内部关闭
-            tlcp_socket_alert(conn, TLS_alert_close_notify);
-        } else {
-            close(conn->sock);
-        }
+        // 发送关闭消息
+        tlcp_socket_send_close_alert(conn);
+        // 关闭 TCP socket
+        close(conn->sock);
     }
     // 将连接上下文中的工作密钥销毁
     memset(conn, 0, sizeof(*conn));
 }
+
+
 

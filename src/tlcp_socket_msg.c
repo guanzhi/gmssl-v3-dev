@@ -423,7 +423,7 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
     return 1;
 }
 
-int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn) {
+int tlcp_socket_read_app_data(TLCP_SOCKET_CONNECT *conn) {
     const SM3_HMAC_CTX *hmac_ctx;
     const SM4_KEY      *dec_key;
     uint8_t            *seq_num;
@@ -465,7 +465,7 @@ int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn) {
     return 1;
 }
 
-int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen) {
+int tlcp_socket_write_app_data(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen) {
     const SM3_HMAC_CTX *hmac_ctx;
     const SM4_KEY      *enc_key;
     uint8_t            *seq_num;
@@ -507,10 +507,11 @@ void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description) {
     size_t  len;
     int     alert_level;
     switch (alert_description) {
+        case TLS_alert_close_notify:
         case TLS_alert_user_canceled:
+        case TLS_alert_no_renegotiation:
             alert_level = TLS_alert_level_warning;
             break;
-        case TLS_alert_close_notify:
         case TLS_alert_unexpected_message:
         case TLS_alert_bad_record_mac:
         case TLS_alert_decryption_failed:
@@ -532,7 +533,6 @@ void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description) {
         case TLS_alert_protocol_version:
         case TLS_alert_insufficient_security:
         case TLS_alert_internal_error:
-        case TLS_alert_no_renegotiation:
         case TLS_alert_unsupported_site2site:
         case TLS_alert_no_area:
         case TLS_alert_unsupported_areatype:
@@ -549,6 +549,7 @@ void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description) {
     if (tls_record_set_alert(record, &len, alert_level, alert_description) != 1) {
         return;
     }
+    // 致命类型的消息关闭连接
     if (tls_record_send(record, len, conn->sock) == 1 && alert_level == TLS_alert_level_fatal) {
         //关闭连接
         close(conn->sock);
@@ -1110,3 +1111,4 @@ int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
     return 1;
 }
+

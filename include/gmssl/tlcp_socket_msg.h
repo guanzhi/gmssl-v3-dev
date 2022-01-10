@@ -171,7 +171,7 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
  * @param datalen [in,out]  解密数据长度
  * @return  1 - 成功；-1 - 失败
  */
-int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn);
+int tlcp_socket_read_app_data(TLCP_SOCKET_CONNECT *conn);
 
 /**
  * 写入并加密记录层消息
@@ -181,7 +181,7 @@ int tlcp_socket_read_record(TLCP_SOCKET_CONNECT *conn);
  * @param datalen   [in]  数据长度，长度应小于 TLCP_SOCKET_DEFAULT_FRAME_SIZE
  * @return  1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_record(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen);
+int tlcp_socket_write_app_data(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, size_t datalen);
 
 
 /**
