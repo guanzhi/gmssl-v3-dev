@@ -57,6 +57,27 @@ static const int    tlcp_ciphers[]     = {TLCP_cipher_ecc_sm4_cbc_sm3};
 static const size_t tlcp_ciphers_count = sizeof(tlcp_ciphers) / sizeof(tlcp_ciphers[0]);
 
 
+/**
+ * 读取握手消息
+ *
+ * 读取失败或非握手消息时返回-1
+ *
+ * @param conn [in] TLCP连接对象
+ * @param record [out] 记录层数据
+ * @param recordlen [out] 数据长度
+ * @return 1 - 成功；-1 - 失败
+ */
+static int tlcp_socket_read_handshake(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
+    if (tls_record_recv(record, recordlen, conn->sock) != 1) {
+        return -1;
+    }
+    // 报警协议部署于握手协议消息
+    if (record[0] != TLS_record_handshake) {
+        return -1;
+    }
+    return 1;
+}
+
 int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn,
                                   uint8_t *record, size_t *recordlen) {
     size_t i                    = 0;
@@ -64,9 +85,8 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn,
     size_t client_ciphers_count = sizeof(client_ciphers) / sizeof(client_ciphers[0]);
 
     // 读取消息
-    if (tls_record_recv(record, recordlen, conn->sock) != 1
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
-        tlcp_socket_alert(conn, TLS_alert_protocol_version);
         error_print();
         return -1;
     }
@@ -254,7 +274,7 @@ int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_
     uint8_t *p                    = NULL;
 
 
-    if (tls_record_recv(record, recordlen, conn->sock) != 1
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
         error_print();
         return -1;
@@ -333,12 +353,13 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
         return -1;
     }
     if (tls_record_get_change_cipher_spec(record) != 1) {
+        error_print();
         tlcp_socket_alert(conn, TLS_alert_unexpected_message);
         return -1;
     }
 
     tls_trace("<<<< ClientFinished\n");
-    if (tls_record_recv(record, recordlen, conn->sock) != 1
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
         error_print();
         return -1;
@@ -447,6 +468,10 @@ int tlcp_socket_read_app_data(TLCP_SOCKET_CONNECT *conn) {
         error_print();
         return -1;
     }
+    // 读写过程中出现报警消息，返回错误
+    if (crec[0] == TLS_record_alert) {
+        return -1;
+    }
     // 解密消息。
     vers = crec[1] << 8 | crec[2];
     if (conn->version != vers
@@ -546,11 +571,10 @@ void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description) {
     record[1] = TLCP_VERSION_MAJOR;
     record[2] = TLCP_VERSION_MINOR;
     // 设置消息
-    if (tls_record_set_alert(record, &len, alert_level, alert_description) != 1) {
-        return;
-    }
+    tls_record_set_alert(record, &len, alert_level, alert_description);
+    tls_record_send(record, len, conn->sock);
     // 致命类型的消息关闭连接
-    if (tls_record_send(record, len, conn->sock) == 1 && alert_level == TLS_alert_level_fatal) {
+    if (alert_level == TLS_alert_level_fatal) {
         //关闭连接
         close(conn->sock);
     }
@@ -575,7 +599,7 @@ int tlcp_socket_write_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *co
 }
 
 int tlcp_socket_read_server_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
-    if (tls_record_recv(record, recordlen, conn->sock) != 1) {
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1) {
         error_print();
         return -1;
     }
@@ -622,7 +646,7 @@ int tlcp_socket_read_server_certs(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *con
     X509_CERTIFICATE *enc_cert                               = &server_certs[1];
     X509_CERTIFICATE *ca_cert                                = NULL;
 
-    if (tls_record_recv(record, recordlen, conn->sock) != 1
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
         error_print();
         return -1;
@@ -714,7 +738,7 @@ int tlcp_socket_read_server_key_exchange(TLCP_SOCKET_CONNECT *conn,
     SM2_SIGN_CTX verify_ctx                  = {0};
 
 
-    if (tls_record_recv(record, recordlen, conn->sock) != 1
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
         tlcp_socket_alert(conn, TLS_alert_handshake_failure);
         error_print();
@@ -789,7 +813,7 @@ static int process_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
         return -1;
     }
     // read ServerHelloDone
-    if (tls_record_recv(record, recordlen, conn->sock) != 1
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
         error_print();
         return -1;
@@ -833,7 +857,7 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
     const uint8_t *data;
     size_t        data_len;
 
-    if (tls_record_recv(record, recordlen, conn->sock) != 1
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp
         || tls_record_get_handshake(record, &type, &data, &data_len) != 1) {
         tlcp_socket_alert(conn, TLS_alert_internal_error);
@@ -996,7 +1020,7 @@ int tlcp_socket_read_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
     }
 
     tls_trace("<<<< Finished\n");
-    if (tls_record_recv(record, recordlen, conn->sock) != 1
+    if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_handshake_failure);

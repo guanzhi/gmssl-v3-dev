@@ -278,8 +278,8 @@ ssize_t TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
 
 
 int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port) {
-    SM3_CTX            sm3_ctx;         // 握手消息Hash
-    X509_CERTIFICATE   server_certs[2]; // 服务端证书：签名证书[0]、加密证书[1]
+    SM3_CTX            sm3_ctx                            = {0};         // 握手消息Hash
+    X509_CERTIFICATE   server_certs[2]                    = {0}; // 服务端证书：签名证书[0]、加密证书[1]
     uint8_t            record[TLS_MAX_RECORD_SIZE]        = {0};
     uint8_t            enc_cert_vector[TLS_MAX_CERT_SIZE] = {0};   // 加密证书DER向量
     size_t             recordlen                          = 0;
@@ -315,11 +315,12 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     // 开始握手
     tls_trace(">>>> ClientHello\n");
     if (tlcp_socket_write_client_hello(ctx, conn, record, &recordlen) != 1) {
-        // perror("ClientHello");
+        close(conn->sock);
         return -1;
     }
     tls_trace("<<<< ServerHello\n");
     if (tlcp_socket_read_server_hello(conn, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
     tls_trace("<<<< ServerCertificate\n");
@@ -327,6 +328,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
                                       record, &recordlen,
                                       server_certs,
                                       enc_cert_vector, &enc_cert_vector_len) != 1) {
+        close(conn->sock);
         return -1;
     }
     tls_trace("<<<< ServerKeyExchange\n");
@@ -334,35 +336,42 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
                                              record, &recordlen,
                                              &server_certs[0],
                                              enc_cert_vector, enc_cert_vector_len) != 1) {
+        close(conn->sock);
         return -1;
     }
     // 解析并处理证书请求（如果存在）和服务端Done
     if (tlcp_socket_read_cert_req_server_done(ctx, conn, record, &recordlen, &need_auth) != 1) {
+        close(conn->sock);
         return -1;
     }
     if (need_auth == 1) {
         // 客户端身份认证，发送客户端认证证书
         if (tlcp_socket_write_client_certificate(ctx, conn, record, &recordlen) != 1) {
+            close(conn->sock);
             return -1;
         }
     }
     tls_trace(">>>> ClientKeyExchange\n");
     if (tlcp_socket_write_client_key_exchange(conn, record, &recordlen, &server_certs[1]) != 1) {
+        close(conn->sock);
         return -1;
     }
     if (need_auth == 1) {
         tls_trace(">>>> CertificateVerify\n");
         // 生成并发送证书验证消息
         if (tlcp_socket_write_client_cert_verify(ctx, conn, record, &recordlen) != 1) {
+            close(conn->sock);
             return -1;
         }
     }
     // 发送客户端 密钥变更和 生成finished
     if (tlcp_socket_write_client_spec_finished(conn, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
     // 接收服务端 密钥变更熊和 验证finished
     if (tlcp_socket_read_server_spec_finished(conn, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
     conn->connected = TLCP_SOCKET_CONNECTED;
@@ -425,13 +434,13 @@ static void tlcp_socket_send_close_alert(TLCP_SOCKET_CONNECT *conn) {
  * @param conn [in,out] 连接
  */
 void TLCP_SOCKET_Connect_Close(TLCP_SOCKET_CONNECT *conn) {
-    // 如果连接对象存在，并且socket处于连接状态，那么关闭连接
-    if (conn != NULL && conn->sock != 0) {
-        // 发送关闭消息
-        tlcp_socket_send_close_alert(conn);
-        // 关闭 TCP socket
-        close(conn->sock);
+    if (conn == NULL || conn->sock == 0) {
+        return;
     }
+    // 发送关闭消息
+    tlcp_socket_send_close_alert(conn);
+    // 关闭 TCP socket
+    close(conn->sock);
     // 将连接上下文中的工作密钥销毁
     memset(conn, 0, sizeof(*conn));
 }
