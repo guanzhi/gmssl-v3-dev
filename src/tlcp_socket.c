@@ -147,17 +147,20 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
 
     tls_trace("<<<< ClientHello\n");
     if (tlcp_socket_read_client_hello(conn, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
 
     tls_trace(">>>> ServerHello\n");
     if (tlcp_socket_write_server_hello(conn, ctx->rand, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
 
     tls_trace(">>>> ServerCertificate\n");
     if (tlcp_socket_write_server_certificate(ctx, conn, record, &recordlen,
                                              server_enc_cert, &server_enc_certlen) != 1) {
+        close(conn->sock);
         return -1;
     }
 
@@ -165,15 +168,22 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     if (tlcp_socket_write_server_key_exchange(conn, ctx->server_sig_key,
                                               record, &recordlen,
                                               server_enc_cert, server_enc_certlen) != 1) {
+        close(conn->sock);
         return -1;
     }
 
     if (need_client_auth) {
-        // TODO: Certificate Request消息
+        tls_trace(">>>> CertificateRequest\n");
+        // Certificate Request消息
+        if (tlcp_socket_write_cert_req(ctx, conn, record, &recordlen) != 1) {
+            close(conn->sock);
+            return -1;
+        }
     }
 
     tls_trace(">>>> ServerHelloDone\n");
     if (tlcp_socket_write_server_hello_done(conn, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
 
@@ -182,6 +192,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     }
     tls_trace("<<<< ClientKeyExchange\n");
     if (tlcp_socket_read_client_key_exchange(conn, ctx->server_enc_key, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
 
@@ -190,10 +201,12 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     }
     // 读取并处理密钥变更消息和客户端finished消息
     if (tlcp_socket_read_client_spec_finished(conn, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
     // 服务端变更密码协议，发送finished消息
     if (tlcp_socket_write_server_spec_finished(conn, record, &recordlen) != 1) {
+        close(conn->sock);
         return -1;
     }
     conn->connected = TLCP_SOCKET_CONNECTED;

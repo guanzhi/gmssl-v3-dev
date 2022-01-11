@@ -5,6 +5,20 @@
 #include <gmssl/tlcp_socket.h>
 #include <gmssl/rand.h>
 
+
+static const uint8_t rootca_str[] = "-----BEGIN CERTIFICATE-----\n\
+MIIBszCCAVegAwIBAgIIaeL+wBcKxnswDAYIKoEcz1UBg3UFADAuMQswCQYDVQQG\n\
+EwJDTjEOMAwGA1UECgwFTlJDQUMxDzANBgNVBAMMBlJPT1RDQTAeFw0xMjA3MTQw\n\
+MzExNTlaFw00MjA3MDcwMzExNTlaMC4xCzAJBgNVBAYTAkNOMQ4wDAYDVQQKDAVO\n\
+UkNBQzEPMA0GA1UEAwwGUk9PVENBMFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAE\n\
+MPCca6pmgcchsTf2UnBeL9rtp4nw+itk1Kzrmbnqo05lUwkwlWK+4OIrtFdAqnRT\n\
+V7Q9v1htkv42TsIutzd126NdMFswHwYDVR0jBBgwFoAUTDKxl9kzG8SmBcHG5Yti\n\
+W/CXdlgwDAYDVR0TBAUwAwEB/zALBgNVHQ8EBAMCAQYwHQYDVR0OBBYEFEwysZfZ\n\
+MxvEpgXBxuWLYlvwl3ZYMAwGCCqBHM9VAYN1BQADSAAwRQIgG1bSLeOXp3oB8H7b\n\
+53W+CKOPl2PknmWEq/lMhtn25HkCIQDaHDgWxWFtnCrBjH16/W3Ezn7/U/Vjo5xI\n\
+pDoiVhsLwg==\n\
+-----END CERTIFICATE-----";
+
 static uint8_t cacert_str[] = "-----BEGIN CERTIFICATE-----\n\
 MIIB3jCCAYOgAwIBAgIIAs4MAPwpIBcwCgYIKoEcz1UBg3UwQjELMAkGA1UEBhMC\n\
 Q04xDzANBgNVBAgMBua1meaxnzEPMA0GA1UEBwwG5p2t5beeMREwDwYDVQQKDAjm\n\
@@ -86,6 +100,7 @@ lQ1FVRvB\n\
 
 
 static X509_CERTIFICATE cacert;
+static X509_CERTIFICATE rootcert;
 static X509_CERTIFICATE sigcert;
 static X509_CERTIFICATE enccert;
 static X509_CERTIFICATE client_cert;
@@ -129,9 +144,9 @@ int main(void) {
         error_puts("cert and key load fail.");
         return 1;
     }
-//    server_test();
+    server_test();
 //    client_conn_test();
-    client_auth_test();
+//    client_auth_test();
 
     return 1;
 }
@@ -155,6 +170,16 @@ static void server_test() {
     ctx.rand           = rand_bytes;
     ctx.server_sig_key = &socket_sigkey;
     ctx.server_enc_key = &socket_enckey;
+
+    /* 配置根证书表示需要对客户端进行身份认证 */
+//    ctx.root_certs    = &cacert;
+//    ctx.root_cert_len = 1;
+
+    /* 多个根证书 */
+    X509_CERTIFICATE roots[] = {cacert, rootcert};
+    ctx.root_certs    = roots;
+    ctx.root_cert_len = 2;
+
     // 打开端口监听TLCP连接
     if (TLCP_SOCKET_Listen(&ctx, 30443) != 1) {
         perror("TLCP server listen fail");
@@ -213,6 +238,10 @@ Hello!";
 }
 
 static int load_cert_keys() {
+    if (x509_certificate_from_bytes(&rootcert, rootca_str, strlen(rootca_str)) != 1) {
+        error_print();
+        return -1;
+    }
     if (x509_certificate_from_bytes(&cacert, cacert_str, strlen(cacert_str)) != 1) {
         error_print();
         return -1;

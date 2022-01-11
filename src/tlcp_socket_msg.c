@@ -1138,3 +1138,46 @@ int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     return 1;
 }
 
+int tlcp_socket_write_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
+    const int cert_types[]                    = {TLS_cert_type_ecdsa_sign,};
+    uint8_t   ca_names[TLS_MAX_CA_NAMES_SIZE] = {0};
+    size_t    cert_types_count                = sizeof(cert_types) / sizeof(cert_types[0]);
+    size_t    ca_names_len                    = 0;
+
+    uint8_t *p           = ca_names;
+    size_t  i            = 0;
+    uint8_t dn_item[256] = {0};
+    size_t  dn_item_len  = 0;
+    uint8_t *p_dn        = dn_item;
+
+    // 构造服务端信任的CA证书DN列表，也就是根证书Subject列表
+    for (i = 0; i < ctx->root_cert_len; i++) {
+        p_dn        = dn_item;
+        dn_item_len = 0;
+        // 解析根证数中的subject DN为DER格式
+        if (x509_name_to_der(&ctx->root_certs[i].tbs_certificate.subject, &p_dn, &dn_item_len) != 1) {
+            // 忽略证书无法解析的情况
+            continue;
+        }
+        if (ca_names_len + (2 + dn_item_len) > TLS_MAX_CA_NAMES_SIZE ){
+            // 超过最大能容纳数量，忽略后续的证书
+            break;
+        }
+        tls_uint16array_to_bytes(dn_item, dn_item_len, &p, &ca_names_len);
+    }
+
+    if (tls_record_set_handshake_certificate_request(record, recordlen,
+                                                     cert_types, cert_types_count,
+                                                     ca_names, ca_names_len) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+    return 1;
+}

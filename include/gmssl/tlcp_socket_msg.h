@@ -322,6 +322,18 @@ int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
 int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                          uint8_t *record, size_t *recordlen);
 
+/**
+ * 生成并写入证书请求消息
+ *
+ * @param ctx                   [in] 上下文
+ * @param conn                  [in] socket连接
+ * @param record                [in,out] 记录层数据
+ * @param recordlen             [in,out] 记录层数据长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int tlcp_socket_write_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+                               uint8_t *record, size_t *recordlen);
+
 #ifdef  __cplusplus
 }
 #endif
