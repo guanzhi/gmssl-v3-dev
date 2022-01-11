@@ -908,12 +908,6 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
     }
-    printf("Encrypted pre master secret key:\n");
-    for (int i = 0; i < enced_pre_master_secret_len; ++i) {
-        printf("%02X", enced_pre_master_secret[i]);
-    }
-    printf("\n");
-
     if (tls_record_set_handshake_client_key_exchange_pke(record, recordlen,
                                                          enced_pre_master_secret, enced_pre_master_secret_len) != 1) {
         error_print();
