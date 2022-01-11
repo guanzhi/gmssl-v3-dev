@@ -151,13 +151,32 @@ SM2Cipher ::= SEQUENCE {
 int sm2_ciphertext_to_der(const SM2_CIPHERTEXT *c, uint8_t **out, size_t *outlen)
 {
 	size_t len = 0;
-	asn1_integer_to_der(c->point.x, 32, NULL, &len);
-	asn1_integer_to_der(c->point.y, 32, NULL, &len);
+    // 整数长度不足32字节的情况含有前置0需要计算偏移量去除
+    uint8_t off_x = 0, off_y = 0;
+    uint8_t i= 0;
+    for (i = 0; i < 32; i++) {
+        if (c->point.x[i] == 0) {
+            off_x++;
+        } else {
+            break;
+        }
+    }
+    for (i = 0; i < 32; i++) {
+        if (c->point.y[i] == 0) {
+            off_y++;
+        } else {
+            break;
+        }
+    }
+
+	asn1_integer_to_der(c->point.x+off_x, 32-off_x, NULL, &len);
+	asn1_integer_to_der(c->point.y+off_y, 32-off_y, NULL, &len);
 	asn1_octet_string_to_der(c->hash, 32, NULL, &len);
 	asn1_octet_string_to_der(c->ciphertext, c->ciphertext_size, NULL, &len);
+
 	asn1_sequence_header_to_der(len, out, outlen);
-	asn1_integer_to_der(c->point.x, 32, out, outlen);
-	asn1_integer_to_der(c->point.y, 32, out, outlen);
+	asn1_integer_to_der(c->point.x+off_x, 32-off_x, out, outlen);
+	asn1_integer_to_der(c->point.y+off_y, 32-off_y, out, outlen);
 	asn1_octet_string_to_der(c->hash, 32, out, outlen);
 	asn1_octet_string_to_der(c->ciphertext, c->ciphertext_size, out, outlen);
 	return 1;

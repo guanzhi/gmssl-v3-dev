@@ -890,11 +890,46 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
     uint8_t enced_pre_master_secret[256] = {0};
     size_t  enced_pre_master_secret_len  = {0};
 
+    if (tls_pre_master_secret_generate(pre_master_secret, TLS_version_tlcp) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    // 解析加密证书中的公钥
+    if (x509_certificate_get_public_key(server_enc_cert, &server_enc_key) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_bad_certificate);
+        return -1;
+    }
+    // 使用加密证书中的公钥加密预主密钥
+    if (sm2_encrypt(&server_enc_key, pre_master_secret, 48,
+                    enced_pre_master_secret, &enced_pre_master_secret_len) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    printf("Encrypted pre master secret key:\n");
+    for (int i = 0; i < enced_pre_master_secret_len; ++i) {
+        printf("%02X", enced_pre_master_secret[i]);
+    }
+    printf("\n");
+
+    if (tls_record_set_handshake_client_key_exchange_pke(record, recordlen,
+                                                         enced_pre_master_secret, enced_pre_master_secret_len) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+
     tls_trace("++++ generate secrets\n");
-    if (tls_pre_master_secret_generate(pre_master_secret, TLS_version_tlcp) != 1
-        || tls_prf(pre_master_secret, 48, "master secret",
-                   conn->_client_random, 32, conn->_server_random, 32,
-                   48, conn->_master_secret) != 1
+    if (tls_prf(pre_master_secret, 48, "master secret",
+                conn->_client_random, 32, conn->_server_random, 32,
+                48, conn->_master_secret) != 1
         || tls_prf(conn->_master_secret, 48, "key expansion",
                    conn->_server_random, 32, conn->_client_random, 32,
                    96, conn->_key_block) != 1) {
@@ -915,31 +950,6 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
 //    format_bytes(stderr, 0, 0, "client_write_enc_key : ", conn->key_block + 64, 16);
 //    format_bytes(stderr, 0, 0, "server_write_enc_key : ", conn->key_block + 80, 16);
 //    format_print(stderr, 0, 0, "\n");
-
-    // 解析加密证书中的公钥
-    if (x509_certificate_get_public_key(server_enc_cert, &server_enc_key) != 1) {
-        error_print();
-        tlcp_socket_alert(conn, TLS_alert_bad_certificate);
-        return -1;
-    }
-    // 使用加密证书中的公钥加密预主密钥
-    if (sm2_encrypt(&server_enc_key, pre_master_secret, 48,
-                    enced_pre_master_secret, &enced_pre_master_secret_len) != 1) {
-        error_print();
-        tlcp_socket_alert(conn, TLS_alert_internal_error);
-        return -1;
-    }
-    if (tls_record_set_handshake_client_key_exchange_pke(record, recordlen,
-                                                         enced_pre_master_secret, enced_pre_master_secret_len) != 1) {
-        error_print();
-        tlcp_socket_alert(conn, TLS_alert_internal_error);
-        return -1;
-    }
-    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
-        error_print();
-        return -1;
-    }
-    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
 
     return 1;
 }
