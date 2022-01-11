@@ -71,6 +71,16 @@ void print_bytes(const uint8_t *data, size_t datalen)
 	printf("\n");
 }
 
+void print_hex_str(const uint8_t *data, size_t datalen)
+{
+    size_t i;
+    for (i = 0; i < datalen; i++) {
+        printf("%02X", data[i]);
+    }
+    printf("\n");
+}
+
+
 void print_nodes(const uint32_t *in, size_t inlen)
 {
 	size_t i;
