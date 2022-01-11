@@ -150,9 +150,9 @@ int sm2_signature_from_der(SM2_SIGNATURE *sig, const uint8_t **in, size_t *inlen
     // DER格式不含前置0，对于长度不足32时需要补足前缀0
     memset(sig, 0, sizeof(SM2_SIGNATURE));
     offset = 32 - rlen;
-    memcpy((sig->r) + offset, r, 32);
+    memcpy(sig->r + offset, r, rlen);
     offset = 32 - slen;
-    memcpy((sig->s) + offset, s, 32);
+    memcpy(sig->s + offset, s, slen);
     return 1;
 }
 
@@ -200,29 +200,32 @@ int sm2_ciphertext_to_der(const SM2_CIPHERTEXT *c, uint8_t **out, size_t *outlen
 
 int sm2_ciphertext_from_der(SM2_CIPHERTEXT *a, const uint8_t **in, size_t *inlen)
 {
-	const uint8_t *data, *x, *y, *hash, *c;
-	size_t datalen, xlen, ylen, hashlen, clen;
+    const uint8_t *data, *x, *y, *hash, *c;
+    size_t        datalen, xlen, ylen, hashlen, clen;
+    uint8_t       offset = 0;
 
-	if (asn1_sequence_from_der(&data, &datalen, in, inlen) < 0
-		|| asn1_integer_from_der(&x, &xlen, &data, &datalen) < 0
-		|| asn1_integer_from_der(&y, &ylen, &data, &datalen) < 0
-		|| asn1_octet_string_from_der(&hash, &hashlen, &data, &datalen) < 0
-		|| asn1_octet_string_from_der(&c, &clen, &data, &datalen) < 0
-		|| datalen > 0) {
-		return -1;
-	}
-	if (xlen != 32
-		|| ylen != 32
-		|| hashlen != 32
-		|| clen < 1) {
-		return -1;
-	}
-
-	memcpy(a->point.x, x, 32);
-	memcpy(a->point.y, y, 32);
-	memcpy(a->hash, hash, 32);
-	memcpy(a->ciphertext, c, clen);
-	a->ciphertext_size = (uint32_t)clen;
+    if (asn1_sequence_from_der(&data, &datalen, in, inlen) < 0
+        || asn1_integer_from_der(&x, &xlen, &data, &datalen) < 0
+        || asn1_integer_from_der(&y, &ylen, &data, &datalen) < 0
+        || asn1_octet_string_from_der(&hash, &hashlen, &data, &datalen) < 0
+        || asn1_octet_string_from_der(&c, &clen, &data, &datalen) < 0
+        || datalen > 0) {
+        return -1;
+    }
+    if (xlen > 32
+        || ylen > 32
+        || hashlen != 32
+        || clen < 1) {
+        return -1;
+    }
+    memset(&a->point, 0, sizeof(SM2_POINT));
+    offset = 32 - xlen;
+    memcpy(a->point.x + offset, x, xlen);
+    offset = 32 - ylen;
+    memcpy(a->point.y + offset, y, ylen);
+    memcpy(a->hash, hash, 32);
+    memcpy(a->ciphertext, c, clen);
+    a->ciphertext_size = (uint32_t) clen;
 	return 1;
 }
 
