@@ -200,18 +200,18 @@ static void server_test() {
 
 
 static void handle_echo(TLCP_SOCKET_CONNECT *conn) {
-    size_t  n                        = 0;
+    ssize_t  n                        = 0;
     uint8_t buf[TLS_MAX_RECORD_SIZE] = {0};
 
     n = sizeof(buf);
     for (;;) {
         if ((n = TLCP_SOCKET_Read(conn, buf, n)) < 0) {
             error_print();
-            return;
+            break;
         }
         if ((n = TLCP_SOCKET_Write(conn, buf, n)) < 0) {
             error_print();
-            return;
+            break;
         }
     }
 }

@@ -228,18 +228,19 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
 ssize_t TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
     size_t n = 0;
     if (conn == NULL || conn->sock <= 0) {
-        return 0;
+        error_puts("illegal parameter conn");
+        return -1;
     }
 
     if (buf == NULL || count <= 0) {
         error_puts("illegal parameter buf");
-        return 0;
+        return -1;
     }
 
     if (conn->_buf_remain == 0) {
-        if (tlcp_socket_read_app_data(conn) == -1) {
+        if (tlcp_socket_read_app_data(conn) != 1) {
             error_print();
-            return 0;
+            return -1;
         }
         // 对读取的消息进行错误处理
         if (conn->record[0] == TLS_record_alert) {
@@ -252,11 +253,11 @@ ssize_t TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
                         return EOF;
                     } else {
                         error_print_msg("remote error alert description %d", conn->record[2]);
-                        return 0;
+                        return -1;
                     }
                 default:
                     error_puts("unknown alert message type");
-                    return 0;
+                    return -1;
             }
         }
     }

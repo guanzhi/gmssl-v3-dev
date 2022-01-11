@@ -327,13 +327,7 @@ int tlcp_socket_read_client_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_
     conn->_client_write_IV = p;
     p += conn->fixed_iv_length;
     conn->_server_write_IV = p;
-//    format_bytes(stderr, 0, 0, "pre_master_secret : ", pre_master_secret, 48);
-//    format_bytes(stderr, 0, 0, "_master_secret : ", conn->_master_secret, 48);
-//    format_bytes(stderr, 0, 0, "client_write_mac_key : ", conn->_key_block, 32);
-//    format_bytes(stderr, 0, 0, "server_write_mac_key : ", conn->_key_block + 32, 32);
-//    format_bytes(stderr, 0, 0, "_client_write_enc_key : ", conn->_key_block + 64, 16);
-//    format_bytes(stderr, 0, 0, "_server_write_enc_key : ", conn->_key_block + 80, 16);
-//    format_print(stderr, 0, 0, "\n");
+
     return 1;
 }
 
@@ -467,10 +461,7 @@ int tlcp_socket_read_app_data(TLCP_SOCKET_CONNECT *conn) {
         error_print();
         return -1;
     }
-    // 读写过程中出现报警消息，返回错误
-    if (crec[0] == TLS_record_alert) {
-        return -1;
-    }
+
     // 解密消息。
     vers = crec[1] << 8 | crec[2];
     if (conn->version != vers
@@ -479,7 +470,14 @@ int tlcp_socket_read_app_data(TLCP_SOCKET_CONNECT *conn) {
         error_print();
         return -1;
     }
-    // (void) tls_record_print(stderr, mrec, mlen, 0, 0);
+    // 读写过程中出现报警消息，返回错误
+    if (crec[0] == TLS_record_alert) {
+        // Record header {0...4} Alert {level: 5,description: 6}
+        if (mrec[6] != TLS_alert_close_notify) {
+            error_print_msg("remote error code: %d", mrec[6]);
+        }
+        return -1;
+    }
     // 向后偏移头部，得到数据部分
     conn->_p          = mrec + 5;
     // 设置剩余长度为除头部分外长度
@@ -937,13 +935,6 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
     sm4_set_decrypt_key(&conn->_server_write_enc_key, conn->_key_block + 80);
     conn->_client_write_IV = conn->_key_block + 96;
     conn->_server_write_IV = conn->_key_block + 112;
-//    format_bytes(stderr, 0, 0, "pre_master_secret : ", pre_master_secret, 48);
-//    format_bytes(stderr, 0, 0, "master_secret : ", conn->master_secret, 48);
-//    format_bytes(stderr, 0, 0, "client_write_mac_key : ", conn->key_block, 32);
-//    format_bytes(stderr, 0, 0, "server_write_mac_key : ", conn->key_block + 32, 32);
-//    format_bytes(stderr, 0, 0, "client_write_enc_key : ", conn->key_block + 64, 16);
-//    format_bytes(stderr, 0, 0, "server_write_enc_key : ", conn->key_block + 80, 16);
-//    format_print(stderr, 0, 0, "\n");
 
     return 1;
 }
