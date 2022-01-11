@@ -1159,7 +1159,7 @@ int tlcp_socket_write_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, 
             // 忽略证书无法解析的情况
             continue;
         }
-        if (ca_names_len + (2 + dn_item_len) > TLS_MAX_CA_NAMES_SIZE ){
+        if (ca_names_len + (2 + dn_item_len) > TLS_MAX_CA_NAMES_SIZE) {
             // 超过最大能容纳数量，忽略后续的证书
             break;
         }
@@ -1179,5 +1179,104 @@ int tlcp_socket_write_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, 
         return -1;
     }
     sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+    return 1;
+}
+
+
+int tlcp_socket_read_client_cert(TLCP_SOCKET_CONNECT *conn,
+                                 uint8_t *record, size_t *recordlen,
+                                 X509_CERTIFICATE *client_cert) {
+    uint8_t       certs_vector[TLS_MAX_CERTIFICATES_SIZE] = {0};
+    size_t        certs_vector_len                        = 0;
+    const uint8_t *p                                      = certs_vector;
+    const uint8_t *certs                                  = NULL;
+    const uint8_t *der                                    = NULL;
+    size_t        certslen                                = 0;
+    size_t        derlen                                  = 0;
+
+    if (tls_record_recv(record, recordlen, conn->sock) != 1
+        || tls_record_version(record) != TLS_version_tlcp) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+
+    if (tls_record_get_handshake_certificate(record, certs_vector, &certs_vector_len) != 1) {
+        error_print();
+        return -1;
+    }
+
+    if (tls_uint24array_from_bytes(&certs, &certslen, &p, &certs_vector_len) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_internal_error);
+        return -1;
+    }
+
+    // 解析客户端证书
+    if (tls_uint24array_from_bytes(&der, &derlen, &certs, &certslen) != 1
+        || x509_certificate_from_der(client_cert, &der, &derlen) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_bad_certificate);
+        return -1;
+    }
+
+    return 1;
+}
+
+
+int tlcp_socket_read_client_cert_verify(TLCP_SOCKET_CONNECT *conn,
+                                        uint8_t *record, size_t *recordlen,
+                                        X509_CERTIFICATE *client_cert) {
+
+    SM3_CTX      tmp_sm3_ctx;
+    SM2_SIGN_CTX sign_ctx = {0};
+    SM2_KEY      *pub_key = &sign_ctx.key;
+
+    uint8_t       dgst[SM3_DIGEST_SIZE]                  = {0};
+    uint8_t       sig_vector[TLS_MAX_SIGNATURE_SIZE + 2] = {0};           // 签名向量
+    const uint8_t *p                                     = sig_vector;    // 向量指针
+    const uint8_t *sig                                   = NULL;
+    size_t        siglen                                 = 0;
+    size_t        sig_vector_len                         = 0;
+
+    memcpy(&tmp_sm3_ctx, conn->_sm3_ctx, sizeof(SM3_CTX));
+    sm3_finish(&tmp_sm3_ctx, dgst);
+
+    if (tls_record_recv(record, recordlen, conn->sock) != 1
+        || tls_record_version(record) != TLS_version_tlcp) {
+        error_print();
+        return -1;
+    }
+    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+
+    if (tls_record_get_handshake_certificate_verify(record, sig_vector, &sig_vector_len) != 1) {
+        error_print();
+        return -1;
+    }
+    // 签名值是一个向量
+    tls_uint16array_from_bytes(&sig, &siglen, &p, &sig_vector_len);
+    if (x509_certificate_get_public_key_sm2(client_cert, pub_key) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_bad_certificate);
+        return -1;
+    }
+    /*
+     * from GBT38636 6.4.5.6
+     *
+     * case ecc_sm3: // 当ECC为SM2算法时，用这个套件
+     *  digitally-signed struct{
+     *      opaque sm3_hash[32];
+     *  }
+     * sm3_hash 是指hash运行的结果，运算的内容时客户端hello消息开始
+     * 直到本消息（不包括本消息）的所有与握手有关的消息，包括握手消息
+     * 的类型和长度域。
+     */
+    sm2_verify_init(&sign_ctx, pub_key, SM2_DEFAULT_ID);
+    sm2_verify_update(&sign_ctx, dgst, SM3_DIGEST_SIZE);
+    if (sm2_verify_finish(&sign_ctx, sig, siglen) != 1) {
+        error_print();
+        tlcp_socket_alert(conn, TLS_alert_handshake_failure);
+        return -1;
+    }
     return 1;
 }

@@ -116,14 +116,15 @@ void TLCP_SOCKET_Close(TLCP_SOCKET_CTX *ctx) {
  * @return 1 - 连接成功; -1 - 连接失败
  */
 int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
-    uint8_t            record[TLS_MAX_RECORD_SIZE];
-    size_t             recordlen          = 0;
-    uint8_t            server_enc_cert[TLS_MAX_CERTIFICATES_SIZE];
-    size_t             server_enc_certlen = 0;
-    uint8_t            need_client_auth   = 0;
-    struct sockaddr_in client_addr;
-    socklen_t          client_addrlen     = sizeof(client_addr);
-    SM3_CTX            sm3_ctx; // 握手消息Hash
+    uint8_t            record[TLS_MAX_RECORD_SIZE]                = {0};
+    size_t             recordlen                                  = 0;
+    uint8_t            server_enc_cert[TLS_MAX_CERTIFICATES_SIZE] = {0};
+    size_t             server_enc_certlen                         = 0;
+    uint8_t            need_client_auth                           = 0;
+    struct sockaddr_in client_addr                                = {0};
+    socklen_t          client_addrlen                             = sizeof(client_addr);
+    SM3_CTX            sm3_ctx                                    = {0}; // 握手消息Hash
+    X509_CERTIFICATE   client_cert                                = {0};
 
 
     if (ctx == NULL || conn == NULL) {
@@ -188,7 +189,12 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     }
 
     if (need_client_auth) {
-        // TODO: Client Certificate消息
+        // Client Certificate消息
+        tls_trace("<<<< ClientCertificate\n");
+        if (tlcp_socket_read_client_cert(conn, record, &recordlen, &client_cert) != 1){
+            close(conn->sock);
+            return -1;
+        }
     }
     tls_trace("<<<< ClientKeyExchange\n");
     if (tlcp_socket_read_client_key_exchange(conn, ctx->server_enc_key, record, &recordlen) != 1) {
@@ -197,7 +203,12 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     }
 
     if (need_client_auth) {
-        // TODO: Certificate Verify消息
+        tls_trace("<<<< CertificateVerify\n");
+        // 验证 Certificate Verify消息
+        if(tlcp_socket_read_client_cert_verify(conn,record, &recordlen, &client_cert) != 1) {
+            close(conn->sock);
+            return -1;
+        }
     }
     // 读取并处理密钥变更消息和客户端finished消息
     if (tlcp_socket_read_client_spec_finished(conn, record, &recordlen) != 1) {
