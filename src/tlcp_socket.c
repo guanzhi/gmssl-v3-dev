@@ -57,7 +57,7 @@
 #include <arpa/inet.h>
 
 
-int TLCP_SOCKET_Listen(TLCP_SOCKET_CTX *ctx, int port) {
+int TLCP_SOCKET_Listen(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_Listener *ln, int port) {
     struct sockaddr_in server_addr;
     int                sock;
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -73,10 +73,10 @@ int TLCP_SOCKET_Listen(TLCP_SOCKET_CTX *ctx, int port) {
         return -1;
     }
     // printf("TLCP Socket listen in port %d\n", port);
-    return TLCP_SOCKET_Listen_raw(ctx, sock);
+    return TLCP_SOCKET_Listen_raw(ctx, ln, sock);
 }
 
-int TLCP_SOCKET_Listen_raw(TLCP_SOCKET_CTX *ctx, int fd) {
+int TLCP_SOCKET_Listen_raw(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_Listener *ln, int fd) {
     if (ctx == NULL) {
         error_print();
         return -1;
@@ -89,60 +89,53 @@ int TLCP_SOCKET_Listen_raw(TLCP_SOCKET_CTX *ctx, int fd) {
         error_print();
         return -1;
     }
-    // 参数检查
-    ctx->_sock = fd;
+    ln->_sock  = fd;
+    ln->config = ctx;
 
     // 启动监听
-    if (listen(ctx->_sock, 16) != 0) {
+    if (listen(ln->_sock, 16) != 0) {
         error_print();
         return -1;
     }
     return 1;
 }
 
-void TLCP_SOCKET_Close(TLCP_SOCKET_CTX *ctx) {
-    if (ctx != NULL && ctx->_sock != 0) {
-        close(ctx->_sock);
+void TLCP_SOCKET_Close(TLCP_SOCKET_Listener *ln) {
+    if (ln != NULL && ln->_sock != 0) {
+        close(ln->_sock);
     }
 }
 
-/**
- * 服务端接受TLCP连接 并进行握手
- *
- * 该方法将会发生阻塞，直到发现连接或服务关闭
- *
- * @param ctx  [in] 上下文
- * @param conn [out] 连接对象
- * @return 1 - 连接成功; -1 - 连接失败
- */
-int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
+int TLCP_SOCKET_Accept(TLCP_SOCKET_Listener *ln, TLCP_SOCKET_CONNECT *conn) {
     SM3_CTX            sm3_ctx        = {0}; // 握手消息Hash
     X509_CERTIFICATE   client_cert    = {0};
     struct sockaddr_in client_addr    = {0};
     socklen_t          client_addrlen = sizeof(client_addr);
 
-    uint8_t buf[TLS_MAX_RECORD_SIZE]                   = {0};
-    uint8_t server_enc_cert[TLS_MAX_CERTIFICATES_SIZE] = {0};
-    uint8_t need_client_auth                           = 0;
-    size_t  server_enc_certlen                         = 0;
-    size_t  buf_len                                    = 0;
-    uint8_t *p                                         = buf;
+    uint8_t            buf[TLS_MAX_RECORD_SIZE]                   = {0};
+    uint8_t            server_enc_cert[TLS_MAX_CERTIFICATES_SIZE] = {0};
+    uint8_t            need_client_auth                           = 0;
+    size_t             server_enc_certlen                         = 0;
+    size_t             buf_len                                    = 0;
+    uint8_t            *p                                         = buf;
 
 
-    if (ctx == NULL || conn == NULL) {
+
+    if (ln == NULL || conn == NULL) {
         error_puts("illegal parameter");
         return -1;
     }
-    need_client_auth = ctx->root_cert_len > 0 && ctx->root_certs != NULL;
+    need_client_auth = ln->config->root_cert_len > 0 && ln->config->root_certs != NULL;
     memset(conn, 0, sizeof(*conn));
 
-    if (ctx->rand == NULL){
+    if (ln->config->rand == NULL) {
         // 使用系统默认随机源
-        ctx->rand = rand_bytes;
+        ln->config->rand = rand_bytes;
     }
+    conn->config     = ln->config;
 
     // 阻塞接收连接
-    if ((conn->sock = accept(ctx->_sock, (struct sockaddr *) &client_addr, &client_addrlen)) < 0) {
+    if ((conn->sock = accept(ln->_sock, (struct sockaddr *) &client_addr, &client_addrlen)) < 0) {
         error_print();
         return -1;
     }
@@ -161,20 +154,20 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
 
     buf_len = 0;
     // tls_trace(">>>> ServerHello\n");
-    if (tlcp_socket_write_server_hello(ctx, conn, &p, &buf_len) != 1) {
+    if (tlcp_socket_write_server_hello(conn, &p, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
 
     // tls_trace(">>>> ServerCertificate\n");
-    if (tlcp_socket_write_server_certificate(ctx, conn, &p, &buf_len,
+    if (tlcp_socket_write_server_certificate(conn, &p, &buf_len,
                                              server_enc_cert, &server_enc_certlen) != 1) {
         close(conn->sock);
         return -1;
     }
 
     // tls_trace(">>>> ServerKeyExchange\n");
-    if (tlcp_socket_write_server_key_exchange(conn, ctx->server_sig_key,
+    if (tlcp_socket_write_server_key_exchange(conn, ln->config->server_sig_key,
                                               &p, &buf_len,
                                               server_enc_cert, server_enc_certlen) != 1) {
         close(conn->sock);
@@ -184,7 +177,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     if (need_client_auth) {
         // tls_trace(">>>> CertificateRequest\n");
         // Certificate Request消息
-        if (tlcp_socket_write_cert_req(ctx, conn, &p, &buf_len) != 1) {
+        if (tlcp_socket_write_cert_req(conn, &p, &buf_len) != 1) {
             close(conn->sock);
             return -1;
         }
@@ -210,7 +203,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
         }
     }
     // tls_trace("<<<< ClientKeyExchange\n");
-    if (tlcp_socket_read_client_key_exchange(conn, ctx->server_enc_key, buf, &buf_len) != 1) {
+    if (tlcp_socket_read_client_key_exchange(conn, ln->config->server_enc_key, buf, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
@@ -322,7 +315,7 @@ ssize_t TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
 }
 
 
-int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port) {
+int TLCP_SOCKET_Dial(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port) {
     SM3_CTX            sm3_ctx                            = {0};    // 握手消息Hash
     X509_CERTIFICATE   server_certs[2]                    = {0};    // 服务端证书：签名证书[0]、加密证书[1]
     uint8_t            buf[TLS_MAX_RECORD_SIZE]           = {0};
@@ -342,10 +335,11 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     server_addr.sin_family      = AF_INET;
     server_addr.sin_port        = htons(port);
     memset(conn, 0, sizeof(*conn));
-    if (ctx->rand == NULL){
+    if (ctx->rand == NULL) {
         // 使用系统默认随机源
         ctx->rand = rand_bytes;
     }
+    conn->config                = ctx;
 
     if ((conn->sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         error_print();
@@ -364,7 +358,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
 
     // 开始握手
     // tls_trace(">>>> ClientHello\n");
-    if (tlcp_socket_write_client_hello(ctx, conn, buf, &buf_len) != 1) {
+    if (tlcp_socket_write_client_hello(conn, buf, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
@@ -376,7 +370,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
         return -1;
     }
     // tls_trace("<<<< ServerCertificate\n");
-    if (tlcp_socket_read_server_certs(ctx, conn,
+    if (tlcp_socket_read_server_certs(conn,
                                       buf, &buf_len,
                                       server_certs,
                                       enc_cert_vector, &enc_cert_vector_len) != 1) {
@@ -393,7 +387,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     }
     // tls_trace("<<<< ServerHelloDone\n");
     // 解析并处理证书请求（如果存在）和服务端Done
-    if (tlcp_socket_read_cert_req_server_done(ctx, conn, buf, &buf_len, &need_auth) != 1) {
+    if (tlcp_socket_read_cert_req_server_done(conn, buf, &buf_len, &need_auth) != 1) {
         close(conn->sock);
         return -1;
     }
@@ -403,20 +397,20 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     if (need_auth == 1) {
         // tls_trace(">>>> Certificate\n");
         // 客户端身份认证，发送客户端认证证书
-        if (tlcp_socket_write_client_certificate(ctx, conn, &p, &buf_len) != 1) {
+        if (tlcp_socket_write_client_certificate(conn, &p, &buf_len) != 1) {
             close(conn->sock);
             return -1;
         }
     }
     // tls_trace(">>>> ClientKeyExchange\n");
-    if (tlcp_socket_write_client_key_exchange(ctx, conn, &p, &buf_len, &server_certs[1]) != 1) {
+    if (tlcp_socket_write_client_key_exchange(conn, &p, &buf_len, &server_certs[1]) != 1) {
         close(conn->sock);
         return -1;
     }
     if (need_auth == 1) {
         // tls_trace(">>>> CertificateVerify\n");
         // 生成并发送证书验证消息
-        if (tlcp_socket_write_client_cert_verify(ctx, conn, &p, &buf_len) != 1) {
+        if (tlcp_socket_write_client_cert_verify(conn, &p, &buf_len) != 1) {
             close(conn->sock);
             return -1;
         }

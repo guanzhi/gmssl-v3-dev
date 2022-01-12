@@ -114,7 +114,7 @@ typedef int (*TLCP_SOCKET_Decrypter_FuncPtr)(void *ctx, uint8_t *ciphertext, siz
  *
  * 公钥、证书、签名、解密
  */
-typedef struct {
+typedef struct TLCP_SOCKET_KEY_st {
     void                          *ctx;      // 上下文，可以是一个设备句柄或会话指针用于函数调用。
     X509_CERTIFICATE              *cert;     // 证书（公钥）
     TLCP_SOCKET_Signer_FuncPtr    signer;    // 密钥对的签名实现
@@ -122,18 +122,32 @@ typedef struct {
 
 } TLCP_SOCKET_KEY;
 
-typedef struct {
-    TLCP_SOCKET_RandBytes_FuncPtr rand;             // 随机源
-    X509_CERTIFICATE              *root_certs;      // 根证书列表，客户端用于验证服务端证书，服务端用于验证客户端证书，如果为空表示不验证。
-    int                           root_cert_len;    // 根证书数量
-    TLCP_SOCKET_KEY               *server_sig_key;  // 服务器签名密钥对
-    TLCP_SOCKET_KEY               *server_enc_key;  // 服务器加密密钥对
-    TLCP_SOCKET_KEY               *client_sig_key;  // 客户端认证密钥对
-    // ##################### 私有 #####################
-    int                           _sock;            // Server SocketFD
 
-} TLCP_SOCKET_CTX;
+struct TLCP_SOCKET_CONNECT_st;
+typedef struct TLCP_SOCKET_CONNECT_st TLCP_SOCKET_CONNECT;
 
+/**
+ * 报警协议处理器
+ *
+ * 每当连接收到或发送报警协议时将触发该函数
+ * @param conn              [in] 连接上下文
+ * @param alert_description [in] 报警描述信息
+ */
+typedef void (*TLCP_SOCKET_Alert_Handler_FuncPtr)(TLCP_SOCKET_CONNECT *conn, uint8_t alert_description);
+
+/**
+ * SOCKET配置上下文
+ */
+typedef struct TLCP_SOCKET_CONFIG_st {
+    TLCP_SOCKET_RandBytes_FuncPtr     rand;             // 随机源
+    X509_CERTIFICATE                  *root_certs;      // 根证书列表，客户端用于验证服务端证书，服务端用于验证客户端证书，如果为空表示不验证。
+    int                               root_cert_len;    // 根证书数量
+    TLCP_SOCKET_KEY                   *server_sig_key;  // 服务器签名密钥对
+    TLCP_SOCKET_KEY                   *server_enc_key;  // 服务器加密密钥对
+    TLCP_SOCKET_KEY                   *client_sig_key;  // 客户端认证密钥对
+    TLCP_SOCKET_Alert_Handler_FuncPtr alert_handler;    // 报警消息处理器
+
+} TLCP_SOCKET_CONFIG;
 
 #define TLCP_SOCKET_SERVER_END 0
 #define TLCP_SOCKET_CLIENT_END 1
@@ -150,12 +164,13 @@ typedef struct {
  * 注：握手阶段数据由Accept内部维护，握手结束后初始化完成连接参数。
  * 其中以"_"开头的参数表示私有参数，不应该在外部访问。
  */
-typedef struct {
-    int     sock;               // Socket FD
-    int     version;            // 协议版本
-    int     cipher_suite;       // 密码套件
-    size_t  session_id_len;     // 会话ID长度
-    uint8_t session_id[32];     // 会话ID
+struct TLCP_SOCKET_CONNECT_st {
+    TLCP_SOCKET_CONFIG *config;            // 连接配置上下文
+    int                sock;               // Socket FD
+    int                version;            // 协议版本
+    int                cipher_suite;       // 密码套件
+    size_t             session_id_len;     // 会话ID长度
+    uint8_t            session_id[32];     // 会话ID
 
     uint8_t entity;                     // 0 - server, 1 - client
     uint8_t connected;                  // 0 - 未连接; 1 - 已经建立连接
@@ -186,44 +201,53 @@ typedef struct {
     size_t  _buf_remain;                                // 记录层中数据剩余长度
 
     SM3_CTX *_sm3_ctx;                                  // 用于握手阶段的校验码计算，握手结束后置为NULL
+};
 
-} TLCP_SOCKET_CONNECT;
+/**
+ * 连接监听器，负责接收和建立连接
+ */
+typedef struct {
+    TLCP_SOCKET_CONFIG *config;          // 配置上下文
+    int                _sock;            // Server SocketFD
+} TLCP_SOCKET_Listener;
 
 /**
  * 创建 TLCP listener接收TLCP连接
  *
  * @param ctx  [in,out] TLCP上下文
+ * @param ln   [out] 连接监听器
  * @param port [in]     服务监听端口
  * @return 1 - 读取成功；-1 - 读取失败
  */
-int TLCP_SOCKET_Listen(TLCP_SOCKET_CTX *ctx, int port);
+int TLCP_SOCKET_Listen(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_Listener *ln, int port);
 
 /**
  * 通过文件描述符创建 TLCP listener接收TLCP连接
  *
  * @param ctx [in,out] TLCP上下文
+ * @param ln  [out] 连接监听器
  * @param fd  [in]     文件描述符，如socket fd
  * @return 1 - 读取成功；-1 - 读取失败
  */
-int TLCP_SOCKET_Listen_raw(TLCP_SOCKET_CTX *ctx, int fd);
+int TLCP_SOCKET_Listen_raw(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_Listener *ln, int fd);
 
 /**
  * 关闭TLCP服务端监听
  *
- * @param ctx [in] 上下文
+ * @param ln [in] 监听器
  */
-void TLCP_SOCKET_Close(TLCP_SOCKET_CTX *ctx);
+void TLCP_SOCKET_Close(TLCP_SOCKET_Listener *ln);
 
 /**
  * 服务端接受TLCP连接 并进行握手
  *
  * 该方法将会发生阻塞，直到发现连接或服务关闭
  *
- * @param ctx [in] 上下文
+ * @param ln   [in] 监听器
  * @param conn [out] 连接对象
  * @return 1 - 连接成功; -1 - 连接失败
  */
-int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn);
+int TLCP_SOCKET_Accept(TLCP_SOCKET_Listener *ln, TLCP_SOCKET_CONNECT *conn);
 
 /**
  * 从TLCP连接中解密校验读取数据
@@ -258,7 +282,7 @@ ssize_t TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count);
  * @param port      [in] 主机端口
  * @return 1 - 连接成功；-1 - 连接失败
  */
-int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port);
+int TLCP_SOCKET_Dial(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port);
 
 /**
  * 断开TLCP连接

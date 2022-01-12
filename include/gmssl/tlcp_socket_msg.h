@@ -70,19 +70,16 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, si
 /**
  * 写入服务端Hello消息
  *
- * @param ctx           [in] 上下文
  * @param conn          [in,out] 连接对象
  * @param out           [in,out] 缓冲区，写入后会产生偏移。
  * @param outlen        [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                   uint8_t **out, size_t *outlen);
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CONNECT *conn,uint8_t **out, size_t *outlen);
 
 /**
  * 写入服务端证书消息
  *
- * @param ctx                       [in] 上下文
  * @param conn                      [in,out] 连接对象
  * @param out                       [in,out] 缓冲区，写入后会产生偏移。
  * @param outlen                    [in,out] 缓冲区长度，写入后增加写入长度。
@@ -90,7 +87,7 @@ int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *co
  * @param server_enc_certlen        [out] 加密证书DER长度
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_server_certificate(TLCP_SOCKET_CONNECT *conn,
                                          uint8_t **out, size_t *outlen,
                                          uint8_t *server_enc_cert, size_t *server_enc_certlen);
 
@@ -197,14 +194,12 @@ void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description);
 /**
  * 生成并写入客户端Hello消息
  *
- * @param ctx       [in] 上下文
  * @param conn      [in] socket连接
  * @param record    [in,out] 收到的记录层数据
  * @param recordlen [in,out] 记录层数据
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                   uint8_t *record, size_t *recordlen);
+int tlcp_socket_write_client_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
 
 /**
  * 读取并处理服务端Hello消息
@@ -220,7 +215,6 @@ int tlcp_socket_read_server_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, si
 /**
  * 读取并解析服务端证书
  *
- * @param ctx                   [in] 上下文
  * @param conn                  [in] socket连接
  * @param record                [in,out] 收到的记录层数据
  * @param recordlen             [in,out] 记录层数据
@@ -229,7 +223,7 @@ int tlcp_socket_read_server_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, si
  * @param enc_cert_vector_len   [out] 加密证书DER编码向量长度
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_read_server_certs(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_read_server_certs(TLCP_SOCKET_CONNECT *conn,
                                   uint8_t *record, size_t *recordlen,
                                   X509_CERTIFICATE server_certs[2],
                                   uint8_t *enc_cert_vector, size_t *enc_cert_der_len);
@@ -255,27 +249,25 @@ int tlcp_socket_read_server_key_exchange(TLCP_SOCKET_CONNECT *conn,
 /**
  * 读取并处理证书请求(如果存在)和服务端Done消息
  *
- * @param ctx                   [in] 上下文
  * @param conn                  [in] socket连接
  * @param record                [in,out] 记录层数据
  * @param recordlen             [in,out] 记录层数据长度
  * @param need_auth             [out] 是否需要客户端认证
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, uint8_t *record,
+int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CONNECT *conn, uint8_t *record,
                                           size_t *recordlen, uint8_t *need_auth);
 
 /**
  * 生成预主密钥工作密钥，并写入客户端密钥交换消息
  *
- * @param ctx                   [in] 上下文
  * @param conn                  [in] socket连接
  * @param out                   [in,out] 缓冲区，写入后会产生偏移。
  * @param outlen                [in,out] 缓冲区长度，写入后增加写入长度。
  * @param server_enc_cert       [in] 加密证书
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
                                           uint8_t **out, size_t *outlen,
                                           X509_CERTIFICATE *server_enc_cert);
 
@@ -302,37 +294,33 @@ int tlcp_socket_read_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
 /**
  * 写入客户端认证证书
  *
- * @param ctx                   [in] 上下文
- * @param conn                  [in] socket连接
+ * @param conn              [in] socket连接
  * @param out               [in,out] 缓冲区，写入后会产生偏移。
  * @param outlen            [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                         uint8_t **out, size_t *outlen);
+int tlcp_socket_write_client_certificate(TLCP_SOCKET_CONNECT *conn, uint8_t **out, size_t *outlen);
 
 /**
  * 生成客户端证书验证消息并发送
  *
- * @param ctx                   [in] 上下文
  * @param conn                  [in] socket连接
  * @param out                   [in,out] 缓冲区，写入后会产生偏移。
  * @param outlen                [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CONNECT *conn,
                                          uint8_t **out, size_t *outlen);
 
 /**
  * 生成并写入证书请求消息
  *
- * @param ctx                   [in] 上下文
  * @param conn                  [in] socket连接
  * @param out                   [in,out] 缓冲区，写入后会产生偏移。
  * @param outlen                [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_cert_req(TLCP_SOCKET_CONNECT *conn,
                                uint8_t **out, size_t *outlen);
 
 /**

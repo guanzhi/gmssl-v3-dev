@@ -152,10 +152,11 @@ int main(void) {
 }
 
 static void server_test() {
-    TLCP_SOCKET_CTX     ctx           = {0};
-    TLCP_SOCKET_KEY     socket_sigkey = {0};
-    TLCP_SOCKET_KEY     socket_enckey = {0};
-    TLCP_SOCKET_CONNECT conn          = {0};
+    TLCP_SOCKET_CONFIG   config        = {0};
+    TLCP_SOCKET_Listener ln            = {0};
+    TLCP_SOCKET_KEY      socket_sigkey = {0};
+    TLCP_SOCKET_KEY      socket_enckey = {0};
+    TLCP_SOCKET_CONNECT  conn          = {0};
 
     // 创建SOCKET使用的密钥对
     if (TLCP_SOCKET_GMSSL_Key(&socket_sigkey, &sigcert, &sigkey) != 1) {
@@ -167,23 +168,23 @@ static void server_test() {
         return;
     }
     // 初始化上下文
-    ctx.rand           = rand_bytes;
-    ctx.server_sig_key = &socket_sigkey;
-    ctx.server_enc_key = &socket_enckey;
+    config.rand           = rand_bytes;
+    config.server_sig_key = &socket_sigkey;
+    config.server_enc_key = &socket_enckey;
 
     /* 配置根证书表示需要对客户端进行身份认证 */
     /* 多个根证书 */
     X509_CERTIFICATE roots[] = {cacert, rootcert};
-    ctx.root_certs    = roots;
-    ctx.root_cert_len = 2;
+    config.root_certs    = roots;
+    config.root_cert_len = 2;
 
     // 打开端口监听TLCP连接
-    if (TLCP_SOCKET_Listen(&ctx, 30443) != 1) {
+    if (TLCP_SOCKET_Listen(&config, &ln, 30443) != 1) {
         perror("TLCP server listen fail");
         return;
     }
     for (;;) {
-        if (TLCP_SOCKET_Accept(&ctx, &conn) != 1) {
+        if (TLCP_SOCKET_Accept(&ln, &conn) != 1) {
             perror("TLCP server Accept fail");
             return;
         }
@@ -192,7 +193,7 @@ static void server_test() {
         TLCP_SOCKET_Connect_Close(&conn);
     }
     // 关闭连接
-    TLCP_SOCKET_Close(&ctx);
+    TLCP_SOCKET_Close(&ln);
 }
 
 
@@ -274,7 +275,7 @@ static int load_cert_keys() {
 
 
 static void client_conn_test() {
-    TLCP_SOCKET_CTX     ctx               = {0};
+    TLCP_SOCKET_CONFIG  config            = {0};
     TLCP_SOCKET_CONNECT conn              = {0};
     int                 ret               = 1;
     uint8_t             send[BUFFER_SIZE] = {0};
@@ -283,12 +284,12 @@ static void client_conn_test() {
     size_t              rd                = 0;
     uint8_t             *p                = 0;
 
-    ctx.root_certs    = &cacert;
-    ctx.root_cert_len = 1;
+    config.root_certs    = &cacert;
+    config.root_cert_len = 1;
     errno                                 = 0;
 
     // 拨号连接服务端
-    ret = TLCP_SOCKET_Dial(&ctx, &conn, "127.0.0.1", 30443);
+    ret = TLCP_SOCKET_Dial(&config, &conn, "127.0.0.1", 30443);
     if (ret != 1) {
         error_print();
         return;
@@ -331,7 +332,7 @@ static void client_conn_test() {
 }
 
 static void client_auth_test() {
-    TLCP_SOCKET_CTX     ctx      = {0};
+    TLCP_SOCKET_CONFIG  config   = {0};
     TLCP_SOCKET_CONNECT conn     = {0};
     TLCP_SOCKET_KEY     key      = {0};
     int                 ret      = 1;
@@ -345,17 +346,17 @@ static void client_auth_test() {
         perror("TLCP_SOCKET_GMSSL_Key() ERROR");
         return;
     }
-    ctx.root_certs     = &cacert;
-    ctx.root_cert_len  = 1;
-    ctx.client_sig_key = &key;
+    config.root_certs     = &cacert;
+    config.root_cert_len  = 1;
+    config.client_sig_key = &key;
 
     for (i = 0; i < n; ++i) {
         buff[i] = i;
     }
     start  = clock();
-    for (i = 0; i < 1; i++) {
+    for (i = 0; i < 1000; i++) {
         // 拨号连接服务端
-        ret = TLCP_SOCKET_Dial(&ctx, &conn, "127.0.0.1", 30443);
+        ret = TLCP_SOCKET_Dial(&config, &conn, "127.0.0.1", 30443);
         if (ret != 1) {
             error_print();
             return;
@@ -373,5 +374,5 @@ static void client_auth_test() {
         TLCP_SOCKET_Connect_Close(&conn);
     }
     end    = clock();
-    printf(">> Cost: %.2f s\n", (double)(end - start) / CLOCKS_PER_SEC);
+    printf(">> Cost: %.2f s\n", (double) (end - start) / CLOCKS_PER_SEC);
 }

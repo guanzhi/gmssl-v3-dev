@@ -66,14 +66,14 @@ static const size_t tlcp_ciphers_count = sizeof(tlcp_ciphers) / sizeof(tlcp_ciph
  * @param version           [in] 协议版本号
  * @return 1 - 成功；-1 - 失败
  */
-static int tlcp_socket_pre_master_secret_generate(TLCP_SOCKET_CTX *ctx, uint8_t pre_master_secret[48], int version) {
+static int tlcp_socket_pre_master_secret_generate(rand_src rad, uint8_t pre_master_secret[48], int version) {
     if (!tls_version_text(version)) {
         error_print();
         return -1;
     }
     pre_master_secret[0] = version >> 8;
     pre_master_secret[1] = version;
-    if (ctx->rand(pre_master_secret + 2, 46) != 1) {
+    if (rad(pre_master_secret + 2, 46) != 1) {
         error_print();
         return -1;
     }
@@ -114,6 +114,107 @@ static int tlcp_socket_record_recv(TLCP_SOCKET_CONNECT *conn, uint8_t *record, s
             return -1;
         }
     }
+    return 1;
+}
+
+/**
+ * 加密生成 GenericBlockCipher
+ *
+ * @param rd                [in] 随机源
+ * @param inited_hmac_ctx   [in] hmac上下文
+ * @param enc_key           [in] 加密密钥
+ * @param seq_num           [in] 消息序列号
+ * @param header            [in] 记录层头部
+ * @param in                [in] 明文
+ * @param inlen             [in] 明文长度
+ * @param out               [out] 密文
+ * @param outlen            [out] 密文长度
+ * @return 1 - 成功；-1 - 失败
+ */
+static int tlcp_socket_cbc_encrypt(
+        rand_src rd,
+        const SM3_HMAC_CTX *inited_hmac_ctx, const SM4_KEY *enc_key,
+        const uint8_t seq_num[8], const uint8_t header[5],
+        const uint8_t *in, size_t inlen, uint8_t *out, size_t *outlen) {
+    SM3_HMAC_CTX hmac_ctx;
+    uint8_t      last_blocks[32 + 16] = {0};
+    uint8_t      *mac, *padding, *iv;
+    int          rem, padding_len;
+    int          i;
+
+    if (!inited_hmac_ctx || !enc_key || !seq_num || !header || (!in && inlen) || !out || !outlen) {
+        error_print();
+        return -1;
+    }
+    if (inlen > (1 << 14)) {
+        error_print_msg("invalid tls record data length %zu\n", inlen);
+        return -1;
+    }
+
+    rem = (inlen + 32) % 16;
+    memcpy(last_blocks, in + inlen - rem, rem);
+    mac = last_blocks + rem;
+
+    memcpy(&hmac_ctx, inited_hmac_ctx, sizeof(SM3_HMAC_CTX));
+    sm3_hmac_update(&hmac_ctx, seq_num, 8);
+    sm3_hmac_update(&hmac_ctx, header, 5);
+    sm3_hmac_update(&hmac_ctx, in, inlen);
+    sm3_hmac_finish(&hmac_ctx, mac);
+
+    padding     = mac + 32;
+    padding_len = 16 - rem - 1;
+    for (i      = 0; i <= padding_len; i++) {
+        padding[i] = padding_len;
+    }
+
+    iv = out;
+    if (rd(iv, 16) != 1) {
+        error_print();
+        return -1;
+    }
+    out += 16;
+
+    if (inlen >= 16) {
+        sm4_cbc_encrypt(enc_key, iv, in, inlen / 16, out);
+        out += inlen - rem;
+        iv = out - 16;
+    }
+    sm4_cbc_encrypt(enc_key, iv, last_blocks, sizeof(last_blocks) / 16, out);
+    *outlen = 16 + inlen - rem + sizeof(last_blocks);
+    return 1;
+}
+
+/**
+ * 加密记录层数据
+ *
+ * @param rd        [in] 随机源
+ * @param hmac_ctx  [in] hmac上下文
+ * @param cbc_key   [in] 加密密钥
+ * @param seq_num   [in] 消息序列号
+ * @param in        [in] 明文
+ * @param inlen     [in] 明文长度
+ * @param out       [out] 密文
+ * @param outlen    [out] 密文长度
+ * @return 1 - 成功；-1 - 失败
+ */
+static int tlcp_socket_record_encrypt(
+        rand_src rd,
+        const SM3_HMAC_CTX *hmac_ctx, const SM4_KEY *cbc_key,
+        const uint8_t seq_num[8], const uint8_t *in, size_t inlen,
+        uint8_t *out, size_t *outlen) {
+    if (tlcp_socket_cbc_encrypt(rd, hmac_ctx, cbc_key, seq_num, in,
+                                in + 5, inlen - 5,
+                                out + 5, outlen) != 1) {
+        error_print();
+        return -1;
+    }
+
+    out[0] = in[0];
+    out[1] = in[1];
+    out[2] = in[2];
+    out[3] = (*outlen) >> 8;
+    out[4] = (*outlen);
+    (*outlen) += 5;
     return 1;
 }
 
@@ -190,16 +291,16 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn,
     return 1;
 }
 
-int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CONNECT *conn,
                                    uint8_t **out, size_t *outlen) {
     uint8_t *record   = *out;
     size_t  recordlen = 0;
 
     tls_record_set_version(record, conn->version);
     // 生成客户端随机数
-    tlcp_socket_random_generate(ctx->rand, conn->_server_random);
+    tlcp_socket_random_generate(conn->config->rand, conn->_server_random);
     // 随机产生一个会话ID
-    tlcp_socket_random_generate(ctx->rand, conn->session_id);
+    tlcp_socket_random_generate(conn->config->rand, conn->session_id);
     conn->session_id_len = 32;
     if (tls_record_set_handshake_server_hello(record, &recordlen,
                                               TLS_version_tlcp, conn->_server_random,
@@ -220,7 +321,7 @@ int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *co
     return 1;
 }
 
-int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_server_certificate(TLCP_SOCKET_CONNECT *conn,
                                          uint8_t **out, size_t *outlen,
                                          uint8_t *server_enc_cert, size_t *server_enc_certlen) {
     uint8_t *record   = *out;
@@ -237,7 +338,7 @@ int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
 
     tls_record_set_version(record, conn->version);
     // 序列化签名证书DER
-    if (x509_certificate_to_der(ctx->server_sig_key->cert, &cp, &derlen) != 1) {
+    if (x509_certificate_to_der(conn->config->server_sig_key->cert, &cp, &derlen) != 1) {
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         error_print();
         return -1;
@@ -247,7 +348,7 @@ int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     // 序列化加密证书DER
     cp     = der;
     derlen = 0;
-    if (x509_certificate_to_der(ctx->server_enc_key->cert, &cp, &derlen) != 1) {
+    if (x509_certificate_to_der(conn->config->server_enc_key->cert, &cp, &derlen) != 1) {
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         error_print();
         return -1;
@@ -515,8 +616,9 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t **
         return -1;
     }
     // tls_record_print(stderr, finished, finishedlen, 0, 0);
-    if (tls_record_encrypt(&conn->_server_write_mac_ctx, &conn->_server_write_enc_key,
-                           conn->_server_seq_num, finished, finishedlen, record, &recordlen) != 1) {
+    if (tlcp_socket_record_encrypt(conn->config->rand,
+                                   &conn->_server_write_mac_ctx, &conn->_server_write_enc_key,
+                                   conn->_server_seq_num, finished, finishedlen, record, &recordlen) != 1) {
         error_print();
         return -1;
     }
@@ -567,6 +669,9 @@ int tlcp_socket_read_app_data(TLCP_SOCKET_CONNECT *conn) {
     if (crec[0] == TLS_record_alert) {
         // Record header {0...4} Alert {level: 5,description: 6}
         if (mrec[6] != TLS_alert_close_notify) {
+            if (conn->config->alert_handler != NULL) {
+                conn->config->alert_handler(conn, conn->record[2]);
+            }
             error_print_msg("remote error code: %d", mrec[6]);
         }
         return -1;
@@ -607,7 +712,7 @@ int tlcp_socket_write_app_data(TLCP_SOCKET_CONNECT *conn, const uint8_t *data, s
     // tls_trace(">>>> ApplicationData\n");
     if (tls_record_set_version(mrec, conn->version) != 1
         || tls_record_set_application_data(mrec, &mlen, data, datalen) != 1
-        || tls_record_encrypt(hmac_ctx, enc_key, seq_num, mrec, mlen, crec, &clen) != 1
+        || tlcp_socket_record_encrypt(conn->config->rand, hmac_ctx, enc_key, seq_num, mrec, mlen, crec, &clen) != 1
         || tls_seq_num_incr(seq_num) != 1
         || tls_record_send(crec, clen, conn->sock) != 1) {
         error_print();
@@ -668,11 +773,15 @@ void tlcp_socket_alert(TLCP_SOCKET_CONNECT *conn, int alert_description) {
         //关闭连接
         close(conn->sock);
     }
+    // 如果存在错误处理器，那么进入错误处理流程
+    if (conn->config->alert_handler != NULL) {
+        conn->config->alert_handler(conn, alert_description);
+    }
 }
 
-int tlcp_socket_write_client_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_client_hello(TLCP_SOCKET_CONNECT *conn,
                                    uint8_t *record, size_t *recordlen) {
-    tlcp_socket_random_generate(ctx->rand, conn->_client_random);
+    tlcp_socket_random_generate(conn->config->rand, conn->_client_random);
     if (tls_record_set_handshake_client_hello(record, recordlen,
                                               TLS_version_tlcp, conn->_client_random, NULL, 0,
                                               tlcp_ciphers, tlcp_ciphers_count, NULL, 0) != 1) {
@@ -720,21 +829,22 @@ int tlcp_socket_read_server_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, si
     return 1;
 }
 
-int tlcp_socket_read_server_certs(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_read_server_certs(TLCP_SOCKET_CONNECT *conn,
                                   uint8_t *record, size_t *recordlen,
                                   X509_CERTIFICATE server_certs[2],
                                   uint8_t *enc_cert_vector, size_t *enc_cert_vector_len) {
-    uint8_t          certs_vector[TLS_MAX_CERTIFICATES_SIZE] = {0};
-    size_t           certs_vector_len                        = 0;
-    const uint8_t    *p                                      = certs_vector;
-    const uint8_t    *certs                                  = NULL;
-    const uint8_t    *der                                    = NULL;
-    size_t           certslen                                = 0;
-    size_t           derlen                                  = 0;
-    size_t           i                                       = 0;
-    X509_CERTIFICATE *sign_cert                              = &server_certs[0];
-    X509_CERTIFICATE *enc_cert                               = &server_certs[1];
-    X509_CERTIFICATE *ca_cert                                = NULL;
+    uint8_t            certs_vector[TLS_MAX_CERTIFICATES_SIZE] = {0};
+    size_t             certs_vector_len                        = 0;
+    const uint8_t      *p                                      = certs_vector;
+    const uint8_t      *certs                                  = NULL;
+    const uint8_t      *der                                    = NULL;
+    size_t             certslen                                = 0;
+    size_t             derlen                                  = 0;
+    size_t             i                                       = 0;
+    X509_CERTIFICATE   *sign_cert                              = &server_certs[0];
+    X509_CERTIFICATE   *enc_cert                               = &server_certs[1];
+    X509_CERTIFICATE   *ca_cert                                = NULL;
+    TLCP_SOCKET_CONFIG *ctx                                    = conn->config;
 
     if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp) {
@@ -877,8 +987,8 @@ int tlcp_socket_read_server_key_exchange(TLCP_SOCKET_CONNECT *conn,
  * @param recordlen [in] 消息长度
  * @return  1 - 成功；-1 - 失败
  */
-static int process_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                            uint8_t *record, size_t *recordlen) {
+static int tlcp_socket_process_cert_req(TLCP_SOCKET_CONNECT *conn,
+                                        uint8_t *record, size_t *recordlen) {
 
     int    cert_types[TLS_MAX_CERTIFICATE_TYPES];
     size_t cert_types_count;
@@ -889,9 +999,10 @@ static int process_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
     const uint8_t *dn          = ca_names;
     size_t        dn_len       = 0;
 
-    uint8_t local_dn[256] = {0};
-    size_t  local_dn_len  = 0;
-    uint8_t *lp           = local_dn;
+    uint8_t            local_dn[256] = {0};
+    size_t             local_dn_len  = 0;
+    uint8_t            *lp           = local_dn;
+    TLCP_SOCKET_CONFIG *ctx          = conn->config;
 
 
     // tls_trace("<<<< CertificateRequest\n");
@@ -939,13 +1050,14 @@ static int process_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
     return -1;
 }
 
-int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CONNECT *conn,
                                           uint8_t *record, size_t *recordlen,
                                           uint8_t *need_auth) {
 
     int           type;
     const uint8_t *data;
     size_t        data_len;
+
 
     if (tlcp_socket_read_handshake(conn, record, recordlen) != 1
         || tls_record_version(record) != TLS_version_tlcp
@@ -958,7 +1070,7 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
     // 判断消息是否为证书请求
     if (type == TLS_handshake_certificate_request) {
         // 处理证书请求消息，并验证本地证书是否匹配
-        if (process_cert_req(ctx, conn, record, recordlen) != 1) {
+        if (tlcp_socket_process_cert_req(conn, record, recordlen) != 1) {
             return -1;
         }
         // 需要客户端认证
@@ -972,7 +1084,7 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
     return 1;
 }
 
-int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
                                           uint8_t **out, size_t *outlen,
                                           X509_CERTIFICATE *server_enc_cert) {
     uint8_t *record   = *out;
@@ -984,7 +1096,7 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
     size_t  enced_pre_master_secret_len  = {0};
 
     tls_record_set_version(record, conn->version);
-    if (tlcp_socket_pre_master_secret_generate(ctx, pre_master_secret, conn->version) != 1) {
+    if (tlcp_socket_pre_master_secret_generate(conn->config->rand, pre_master_secret, conn->version) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
@@ -996,7 +1108,7 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
         return -1;
     }
     // 使用加密证书中的公钥加密预主密钥，使用外部随机源。
-    if (sm2_encrypt_ext(ctx->rand, &server_enc_key, pre_master_secret, 48,
+    if (sm2_encrypt_ext(conn->config->rand, &server_enc_key, pre_master_secret, 48,
                         enced_pre_master_secret, &enced_pre_master_secret_len) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_internal_error);
@@ -1074,8 +1186,9 @@ int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t **
     // tls_record_print(stderr, finished, finishedlen, 0, 0);
     sm3_update(conn->_sm3_ctx, finished + 5, finishedlen - 5);
 
-    if (tls_record_encrypt(&conn->_client_write_mac_ctx, &conn->_client_write_enc_key,
-                           conn->_client_seq_num, finished, finishedlen, record, &recordlen) != 1) {
+    if (tlcp_socket_record_encrypt(conn->config->rand,
+                                   &conn->_client_write_mac_ctx, &conn->_client_write_enc_key,
+                                   conn->_client_seq_num, finished, finishedlen, record, &recordlen) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_decode_error);
         return -1;
@@ -1149,23 +1262,23 @@ int tlcp_socket_read_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
 }
 
 
-int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                         uint8_t **out, size_t *outlen) {
+int tlcp_socket_write_client_certificate(TLCP_SOCKET_CONNECT *conn, uint8_t **out, size_t *outlen) {
     uint8_t *record   = *out;
     size_t  recordlen = 0;
 
-    int     type     = TLS_handshake_certificate;
-    uint8_t *data    = record + 5 + 4;
-    uint8_t *certs   = data + 3;
-    size_t  datalen  = 0;
-    size_t  certslen = 0;
-    uint8_t der[1024];
-    uint8_t *cp      = der;
-    size_t  derlen   = 0;
+    int              type         = TLS_handshake_certificate;
+    uint8_t          *data        = record + 5 + 4;
+    uint8_t          *certs       = data + 3;
+    size_t           datalen      = 0;
+    size_t           certslen     = 0;
+    uint8_t          der[1024];
+    uint8_t          *cp          = der;
+    size_t           derlen       = 0;
+    X509_CERTIFICATE *client_cert = conn->config->client_sig_key->cert;
 
     tls_record_set_version(record, conn->version);
     // 序列化签名证书DER
-    if (x509_certificate_to_der(ctx->client_sig_key->cert, &cp, &derlen) != 1) {
+    if (x509_certificate_to_der(client_cert, &cp, &derlen) != 1) {
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         error_print();
         return -1;
@@ -1182,13 +1295,13 @@ int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     return 1;
 }
 
-int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CONNECT *conn,
                                          uint8_t **out, size_t *outlen) {
     uint8_t *record                                        = *out;
     size_t  recordlen                                      = 0;
 
     SM3_CTX         tmp_sm3_ctx;
-    TLCP_SOCKET_KEY *sig_key                               = ctx->client_sig_key;
+    TLCP_SOCKET_KEY *sig_key                               = conn->config->client_sig_key;
     uint8_t         sig[TLS_MAX_SIGNATURE_SIZE]            = {0};
     size_t          siglen                                 = sizeof(sig);
     uint8_t         msg[SM3_DIGEST_SIZE]                   = {0};
@@ -1229,7 +1342,7 @@ int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     return 1;
 }
 
-int tlcp_socket_write_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, uint8_t **out, size_t *outlen) {
+int tlcp_socket_write_cert_req(TLCP_SOCKET_CONNECT *conn, uint8_t **out, size_t *outlen) {
     uint8_t *record   = *out;
     size_t  recordlen = 0;
 
@@ -1238,11 +1351,12 @@ int tlcp_socket_write_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, 
     size_t    cert_types_count                = sizeof(cert_types) / sizeof(cert_types[0]);
     size_t    ca_names_len                    = 0;
 
-    uint8_t *p           = ca_names;
-    size_t  i            = 0;
-    uint8_t dn_item[256] = {0};
-    size_t  dn_item_len  = 0;
-    uint8_t *p_dn        = dn_item;
+    uint8_t            *p           = ca_names;
+    size_t             i            = 0;
+    uint8_t            dn_item[256] = {0};
+    size_t             dn_item_len  = 0;
+    uint8_t            *p_dn        = dn_item;
+    TLCP_SOCKET_CONFIG *ctx         = conn->config;
 
     tls_record_set_version(record, conn->version);
     // 构造服务端信任的CA证书DN列表，也就是根证书Subject列表
