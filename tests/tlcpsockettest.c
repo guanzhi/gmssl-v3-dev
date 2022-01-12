@@ -203,11 +203,11 @@ static void handle_echo(TLCP_SOCKET_CONNECT *conn) {
     n = sizeof(buf);
     for (;;) {
         if ((n = TLCP_SOCKET_Read(conn, buf, n)) < 0) {
-            error_print();
+            // error_print();
             break;
         }
         if ((n = TLCP_SOCKET_Write(conn, buf, n)) < 0) {
-            error_print();
+            // error_print();
             break;
         }
     }

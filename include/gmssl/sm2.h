@@ -54,6 +54,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <gmssl/sm3.h>
+#include <gmssl/rand.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -176,6 +177,16 @@ int sm2_signature_from_der(SM2_SIGNATURE *sig, const uint8_t **in, size_t *inlen
 
 int sm2_do_sign(const SM2_KEY *key, const uint8_t dgst[32], SM2_SIGNATURE *sig);
 
+/**
+ * SM2签名 随机数由外部随机源提供
+ * @param rd  [in] 随机源
+ * @param key [in] sm2密钥
+ * @param dgst [in] 预处理值
+ * @param sig [out] 签名值对象
+ * @return 1 - 成功；-1 - 失败
+ */
+int sm2_do_sign_ext(rand_src rd, const SM2_KEY *key, const uint8_t dgst[32], SM2_SIGNATURE *sig);
+
 int sm2_do_verify(const SM2_KEY *key, const uint8_t dgst[32], const SM2_SIGNATURE *sig);
 
 int sm2_print_signature(FILE *fp, const uint8_t *sig, size_t siglen, int format, int indent);
@@ -183,6 +194,17 @@ int sm2_print_signature(FILE *fp, const uint8_t *sig, size_t siglen, int format,
 #define SM2_MAX_SIGNATURE_SIZE 72
 
 int sm2_sign(const SM2_KEY *key, const uint8_t dgst[32], uint8_t *sig, size_t *siglen);
+
+/**
+ * SM2签名并序列化签名值为DER 随机数由外部随机源提供
+ * @param rd        [in] 随机源
+ * @param key       [in] sm2密钥
+ * @param dgst      [in] 预处理值
+ * @param der       [out] 签名值DER
+ * @param derlen    [out] 签名值DER长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int sm2_sign_ext(rand_src rd, const SM2_KEY *key, const uint8_t dgst[32], uint8_t *der, size_t *derlen);
 
 int sm2_verify(const SM2_KEY *key, const uint8_t dgst[32], const uint8_t *sig, size_t siglen);
 
@@ -208,6 +230,19 @@ int sm2_sign_init(SM2_SIGN_CTX *ctx, const SM2_KEY *key, const char *id);
 int sm2_sign_update(SM2_SIGN_CTX *ctx, const uint8_t *data, size_t datalen);
 
 int sm2_sign_finish(SM2_SIGN_CTX *ctx, uint8_t *sig, size_t *siglen);
+
+/**
+ * SM2结束签名
+ *
+ * k值由外部随机源产生
+ *
+ * @param rd        [in] 随机源
+ * @param ctx       [in] 签名上下文
+ * @param sig       [out] 签名值
+ * @param siglen    [out] 签名值长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int sm2_sign_finish_ext(rand_src rd,SM2_SIGN_CTX *ctx, uint8_t *sig, size_t *siglen);
 
 int sm2_verify_init(SM2_SIGN_CTX *ctx, const SM2_KEY *key, const char *id);
 
@@ -239,9 +274,34 @@ int sm2_ciphertext_print(FILE *fp, const SM2_CIPHERTEXT *c, int format, int inde
 
 int sm2_do_encrypt(const SM2_KEY *key, const uint8_t *in, size_t inlen, SM2_CIPHERTEXT *out);
 
+/**
+ * SM2加密 随机数由外部随机源产生
+ *
+ * @param rd  [in] 随机源
+ * @param key [in] sm2密钥
+ * @param in  [in] 明文
+ * @param inlen [in] 明文长度
+ * @param out  [out] 密文对象
+ * @return 1 - 成功；-1 - 失败
+ */
+int sm2_do_encrypt_ext(rand_src rd, const SM2_KEY *key, const uint8_t *in, size_t inlen, SM2_CIPHERTEXT *out);
+
 int sm2_do_decrypt(const SM2_KEY *key, const SM2_CIPHERTEXT *in, uint8_t *out, size_t *outlen);
 
 int sm2_encrypt(const SM2_KEY *key, const uint8_t *in, size_t inlen, uint8_t *out, size_t *outlen);
+
+/**
+ * SM2加密并编码密文DER 随机数由外部随机源产生
+ *
+ * @param rd  [in] 随机源
+ * @param key [in] sm2密钥
+ * @param in  [in] 明文
+ * @param inlen [in] 明文长度
+ * @param out  [out] 密文
+ * @param outlen [out] 密文长度
+ * @return 1 - 成功；-1 - 失败
+ */
+int sm2_encrypt_ext(rand_src rd, const SM2_KEY *key, const uint8_t *in, size_t inlen, uint8_t *out, size_t *outlen);
 
 int sm2_decrypt(const SM2_KEY *key, const uint8_t *in, size_t inlen, uint8_t *out, size_t *outlen);
 

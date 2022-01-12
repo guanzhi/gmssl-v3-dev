@@ -82,7 +82,7 @@ extern "C" {
  * @param len [in] 缓冲区长度
  * @return 1 - 读取成功；-1 - 读取失败
  */
-typedef int (*TLCP_SOCKET_RandBytes_FuncPtr)(uint8_t *buf, size_t len);
+typedef rand_src TLCP_SOCKET_RandBytes_FuncPtr;
 
 /**
  * TLCP签名接口，用于实现签名

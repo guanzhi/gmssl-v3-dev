@@ -58,6 +58,27 @@
 
 #define SM2_SIGNATURE_MAX_DER_SIZE 77
 
+int sm2_sign_ext(rand_src rd, const SM2_KEY *key, const uint8_t dgst[32], uint8_t *der, size_t *derlen)
+{
+    SM2_SIGNATURE sig;
+    uint8_t *p = der;
+    size_t len = 0;
+
+    if (!der && derlen) {
+        *derlen = SM2_SIGNATURE_MAX_DER_SIZE;
+        return 1;
+    }
+    if (!key || !der || !derlen) {
+        return -1;
+    }
+
+    sm2_do_sign_ext(rd, key, dgst, &sig);
+    sm2_signature_to_der(&sig, &p, &len);
+    *derlen = len;
+
+    return 1;
+}
+
 int sm2_sign(const SM2_KEY *key, const uint8_t dgst[32], uint8_t *der, size_t *derlen)
 {
 	SM2_SIGNATURE sig;
@@ -113,6 +134,19 @@ int sm2_encrypt(const SM2_KEY *key, const uint8_t *in, size_t inlen, uint8_t *ou
 	*outlen = 0;
 	sm2_ciphertext_to_der(c, &out, outlen);
 	return 1;
+}
+
+int sm2_encrypt_ext(rand_src rd, const SM2_KEY *key, const uint8_t *in, size_t inlen, uint8_t *out, size_t *outlen)
+{
+    size_t clen = SM2_CIPHERTEXT_SIZE(inlen);
+    size_t cbuf[clen];
+    SM2_CIPHERTEXT *c = (SM2_CIPHERTEXT *)cbuf;
+
+    sm2_do_encrypt_ext(rd, key, in, inlen, c);
+
+    *outlen = 0;
+    sm2_ciphertext_to_der(c, &out, outlen);
+    return 1;
 }
 
 int sm2_decrypt(const SM2_KEY *key, const uint8_t *in, size_t inlen, uint8_t *out, size_t *outlen)
@@ -235,6 +269,14 @@ int sm2_sign_finish(SM2_SIGN_CTX *ctx, uint8_t *sig, size_t *siglen)
 	sm3_finish(&ctx->sm3_ctx, dgst);
 	sm2_sign(&ctx->key, dgst, sig, siglen);
 	return 1;
+}
+
+int sm2_sign_finish_ext(rand_src rd,SM2_SIGN_CTX *ctx, uint8_t *sig, size_t *siglen)
+{
+    uint8_t dgst[32];
+    sm3_finish(&ctx->sm3_ctx, dgst);
+    sm2_sign_ext(rd, &ctx->key, dgst, sig, siglen);
+    return 1;
 }
 
 int sm2_sign_resume(SM2_SIGN_CTX *ctx)

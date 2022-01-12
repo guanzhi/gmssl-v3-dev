@@ -70,13 +70,13 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, si
 /**
  * 写入服务端Hello消息
  *
+ * @param ctx           [in] 上下文
  * @param conn          [in,out] 连接对象
- * @param randFnc       [in] 随机源
  * @param out           [in,out] 缓冲区，写入后会产生偏移。
  * @param outlen        [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_hello(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_RandBytes_FuncPtr randFnc,
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                    uint8_t **out, size_t *outlen);
 
 /**
@@ -268,13 +268,14 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
 /**
  * 生成预主密钥工作密钥，并写入客户端密钥交换消息
  *
+ * @param ctx                   [in] 上下文
  * @param conn                  [in] socket连接
  * @param out                   [in,out] 缓冲区，写入后会产生偏移。
  * @param outlen                [in,out] 缓冲区长度，写入后增加写入长度。
  * @param server_enc_cert       [in] 加密证书
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                           uint8_t **out, size_t *outlen,
                                           X509_CERTIFICATE *server_enc_cert);
 

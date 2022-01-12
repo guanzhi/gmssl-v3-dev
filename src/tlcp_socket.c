@@ -136,6 +136,11 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     need_client_auth = ctx->root_cert_len > 0 && ctx->root_certs != NULL;
     memset(conn, 0, sizeof(*conn));
 
+    if (ctx->rand == NULL){
+        // 使用系统默认随机源
+        ctx->rand = rand_bytes;
+    }
+
     // 阻塞接收连接
     if ((conn->sock = accept(ctx->_sock, (struct sockaddr *) &client_addr, &client_addrlen)) < 0) {
         error_print();
@@ -156,7 +161,7 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
 
     buf_len = 0;
     // tls_trace(">>>> ServerHello\n");
-    if (tlcp_socket_write_server_hello(conn, ctx->rand, &p, &buf_len) != 1) {
+    if (tlcp_socket_write_server_hello(ctx, conn, &p, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
@@ -337,6 +342,10 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     server_addr.sin_family      = AF_INET;
     server_addr.sin_port        = htons(port);
     memset(conn, 0, sizeof(*conn));
+    if (ctx->rand == NULL){
+        // 使用系统默认随机源
+        ctx->rand = rand_bytes;
+    }
 
     if ((conn->sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         error_print();
@@ -400,7 +409,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
         }
     }
     // tls_trace(">>>> ClientKeyExchange\n");
-    if (tlcp_socket_write_client_key_exchange(conn, &p, &buf_len, &server_certs[1]) != 1) {
+    if (tlcp_socket_write_client_key_exchange(ctx, conn, &p, &buf_len, &server_certs[1]) != 1) {
         close(conn->sock);
         return -1;
     }

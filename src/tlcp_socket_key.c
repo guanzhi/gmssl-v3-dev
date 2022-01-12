@@ -49,6 +49,7 @@
 #include <gmssl/tlcp_socket.h>
 #include <gmssl/error.h>
 #include <gmssl/sm2.h>
+#include <gmssl/rand.h>
 
 
 /**
@@ -60,7 +61,7 @@
  * @param siglen [out] 签名值长度
  * @return 1 - 连接成功；-1 - 连接失败
  */
-static int gmssl_sm2_signer(void *ctx, uint8_t *msg, size_t msglen, uint8_t *sig, size_t *siglen){
+static int gmssl_sm2_signer(void *ctx, uint8_t *msg, size_t msglen, uint8_t *sig, size_t *siglen) {
     SM2_SIGN_CTX sign_ctx;
     if (sm2_sign_init(&sign_ctx, (SM2_KEY *) ctx, SM2_DEFAULT_ID) != 1) {
         error_print();
@@ -89,7 +90,7 @@ static int gmssl_sm2_signer(void *ctx, uint8_t *msg, size_t msglen, uint8_t *sig
  * @return 1 - 成功；-1 - 失败
  */
 static int gmssl_sm2_decrypter(void *ctx, uint8_t *ciphertext, size_t ciphertext_len,
-                               uint8_t *plaintext, size_t *plaintext_len){
+                               uint8_t *plaintext, size_t *plaintext_len) {
     return sm2_decrypt((SM2_KEY *) ctx, ciphertext, ciphertext_len,
                        plaintext, plaintext_len);
 }

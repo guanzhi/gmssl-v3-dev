@@ -58,6 +58,29 @@ static const int    tlcp_ciphers[]     = {TLCP_cipher_ecc_sm4_cbc_sm3};
 static const size_t tlcp_ciphers_count = sizeof(tlcp_ciphers) / sizeof(tlcp_ciphers[0]);
 
 
+/**
+ * 产生预主密钥
+ *
+ * @param ctx               [in] 上下文
+ * @param pre_master_secret [out] 预主密钥
+ * @param version           [in] 协议版本号
+ * @return 1 - 成功；-1 - 失败
+ */
+static int tlcp_socket_pre_master_secret_generate(TLCP_SOCKET_CTX *ctx, uint8_t pre_master_secret[48], int version) {
+    if (!tls_version_text(version)) {
+        error_print();
+        return -1;
+    }
+    pre_master_secret[0] = version >> 8;
+    pre_master_secret[1] = version;
+    if (ctx->rand(pre_master_secret + 2, 46) != 1) {
+        error_print();
+        return -1;
+    }
+    return 1;
+}
+
+
 static int tlcp_socket_record_recv(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
     ssize_t r;
     size_t  len;
@@ -167,16 +190,16 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn,
     return 1;
 }
 
-int tlcp_socket_write_server_hello(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_RandBytes_FuncPtr randFnc,
+int tlcp_socket_write_server_hello(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                    uint8_t **out, size_t *outlen) {
     uint8_t *record   = *out;
     size_t  recordlen = 0;
 
     tls_record_set_version(record, conn->version);
     // 生成客户端随机数
-    tlcp_socket_random_generate(randFnc, conn->_server_random);
+    tlcp_socket_random_generate(ctx->rand, conn->_server_random);
     // 随机产生一个会话ID
-    tlcp_socket_random_generate(randFnc, conn->session_id);
+    tlcp_socket_random_generate(ctx->rand, conn->session_id);
     conn->session_id_len = 32;
     if (tls_record_set_handshake_server_hello(record, &recordlen,
                                               TLS_version_tlcp, conn->_server_random,
@@ -949,7 +972,7 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
     return 1;
 }
 
-int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
+int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                           uint8_t **out, size_t *outlen,
                                           X509_CERTIFICATE *server_enc_cert) {
     uint8_t *record   = *out;
@@ -961,7 +984,7 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
     size_t  enced_pre_master_secret_len  = {0};
 
     tls_record_set_version(record, conn->version);
-    if (tls_pre_master_secret_generate(pre_master_secret, TLS_version_tlcp) != 1) {
+    if (tlcp_socket_pre_master_secret_generate(ctx, pre_master_secret, conn->version) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
@@ -972,9 +995,9 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
         tlcp_socket_alert(conn, TLS_alert_bad_certificate);
         return -1;
     }
-    // 使用加密证书中的公钥加密预主密钥
-    if (sm2_encrypt(&server_enc_key, pre_master_secret, 48,
-                    enced_pre_master_secret, &enced_pre_master_secret_len) != 1) {
+    // 使用加密证书中的公钥加密预主密钥，使用外部随机源。
+    if (sm2_encrypt_ext(ctx->rand, &server_enc_key, pre_master_secret, 48,
+                        enced_pre_master_secret, &enced_pre_master_secret_len) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
@@ -1029,7 +1052,7 @@ int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t **
     }
     *out += recordlen;
     *outlen += recordlen;
-    record   = *out;
+    record    = *out;
     recordlen = 0;
 
     // tls_trace(">>>> Finished\n");
@@ -1161,8 +1184,8 @@ int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
 
 int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
                                          uint8_t **out, size_t *outlen) {
-    uint8_t         *record                                = *out;
-    size_t          recordlen                              = 0;
+    uint8_t *record                                        = *out;
+    size_t  recordlen                                      = 0;
 
     SM3_CTX         tmp_sm3_ctx;
     TLCP_SOCKET_KEY *sig_key                               = ctx->client_sig_key;
