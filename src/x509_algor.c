@@ -361,7 +361,6 @@ int x509_signature_algor_from_der(int *algor, uint32_t *nodes, size_t *nodes_cou
 	int ret;
 	const uint8_t *data;
 	size_t datalen;
-	int has_null_obj;
 	int i;
 
 	if ((ret = asn1_sequence_from_der(&data, &datalen, in, inlen)) != 1) {
@@ -377,7 +376,6 @@ int x509_signature_algor_from_der(int *algor, uint32_t *nodes, size_t *nodes_cou
 		if (*nodes_count == x509_sign_algors[i].nodes_count
 			&& memcmp(nodes, x509_sign_algors[i].nodes, (*nodes_count) * sizeof(int)) == 0) {
 			*algor = x509_sign_algors[i].algor;
-			has_null_obj = x509_sign_algors[i].has_params;
 			break;
 		}
 	}
@@ -386,15 +384,89 @@ int x509_signature_algor_from_der(int *algor, uint32_t *nodes, size_t *nodes_cou
 		return -1;
 	}
 
-	if (has_null_obj && asn1_null_from_der(&data, &datalen) != 1) {
-		error_print();
-		return -1;
-	}
+    // 如果 在读取了algorithm 后还有剩余，那么尝试读取NULL，解决可选参数 parameters 为NULL的情况
+    if (datalen > 0 && asn1_null_from_der(&data, &datalen) != 1) {
+        error_print();
+        return -1;
+    }
 	if (datalen) {
 		error_print();
 		return -1;
 	}
 	return 1;
+}
+
+int x509_signature_algor_null_to_der(int algor, int has_null_obj, uint8_t **out, size_t *outlen){
+    size_t len = 0;
+    const uint32_t *nodes;
+    size_t nodes_count;
+    int i;
+
+    for (i = 0; i < x509_sign_algors_count; i++) {
+        if (algor == x509_sign_algors[i].algor) {
+            nodes = x509_sign_algors[i].nodes;
+            nodes_count = x509_sign_algors[i].nodes_count;
+            break;
+        }
+    }
+    if (i >= x509_sign_algors_count) {
+        error_print();
+        return -1;
+    }
+
+    if (asn1_object_identifier_to_der(OID_undef, nodes, nodes_count, NULL, &len) != 1
+        || (has_null_obj && asn1_null_to_der(NULL, &len) != 1)
+        || asn1_sequence_header_to_der(len, out, outlen) != 1
+        || asn1_object_identifier_to_der(OID_undef, nodes, nodes_count, out, outlen) != 1
+        || (has_null_obj && asn1_null_to_der(out, outlen) != 1)) {
+        error_print();
+        return -1;
+    }
+    return 1;
+}
+int x509_signature_algor_null_from_der(int *algor, int *has_null_obj,  uint32_t *nodes, size_t *nodes_count,
+                                     const uint8_t **in, size_t *inlen){
+    int ret;
+    const uint8_t *data;
+    size_t datalen;
+    int i;
+
+    if ((ret = asn1_sequence_from_der(&data, &datalen, in, inlen)) != 1) {
+        if (ret < 0) error_print();
+        if (ret == 0) error_print();
+        return ret;
+    }
+    if (asn1_object_identifier_from_der(algor, nodes, nodes_count, &data, &datalen) != 1) {
+        error_print();
+        return -1;
+    }
+    for (i = 0; i < x509_sign_algors_count; i++) {
+        if (*nodes_count == x509_sign_algors[i].nodes_count
+            && memcmp(nodes, x509_sign_algors[i].nodes, (*nodes_count) * sizeof(int)) == 0) {
+            *algor = x509_sign_algors[i].algor;
+            break;
+        }
+    }
+    if (i >= x509_sign_algors_count) {
+        error_print();
+        return -1;
+    }
+
+    // 如果 在读取了algorithm 后还有剩余，那么尝试读取NULL，解决可选参数 parameters 为NULL的情况
+    if (datalen > 0) {
+        if (asn1_null_from_der(&data, &datalen) == 1){
+            *has_null_obj = 1;
+        }else{
+            error_print();
+            return -1;
+        }
+    }
+
+    if (datalen) {
+        error_print();
+        return -1;
+    }
+    return 1;
 }
 
 /*

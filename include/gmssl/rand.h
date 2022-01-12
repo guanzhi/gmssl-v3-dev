@@ -56,6 +56,14 @@
 
 int rand_bytes(uint8_t *buf, size_t len);
 
+/**
+ * 随机源函数指针接口
+ *
+ * @param buf [in] 缓冲区
+ * @param len [in] 待读取随机数长度
+ * @return 1 - 成功；-1 - 失败
+ */
+typedef int (*rand_src)(uint8_t *buf, size_t len);
 
 #ifdef __cplusplus
 }

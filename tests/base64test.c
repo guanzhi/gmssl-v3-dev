@@ -94,9 +94,25 @@ int test_base64(void)
 	return err;
 }
 
+int test_base64_str_decode(void){
+    const uint8_t str[] = "MIIBszCCAVegAwIBAgIIaeL+wBcKxnswDAYIKoEcz1UBg3UFADAuMQswCQYDVQQGEwJDTjEOMAwGA1UECgwFTlJDQUMxDzANBgNVBAMMBlJPT1RDQTAeFw0xMjA3MTQwMzExNTlaFw00MjA3MDcwMzExNTlaMC4xCzAJBgNVBAYTAkNOMQ4wDAYDVQQKDAVOUkNBQzEPMA0GA1UEAwwGUk9PVENBMFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAEMPCca6pmgcchsTf2UnBeL9rtp4nw+itk1Kzrmbnqo05lUwkwlWK+4OIrtFdAqnRTV7Q9v1htkv42TsIutzd126NdMFswHwYDVR0jBBgwFoAUTDKxl9kzG8SmBcHG5YtiW/CXdlgwDAYDVR0TBAUwAwEB/zALBgNVHQ8EBAMCAQYwHQYDVR0OBBYEFEwysZfZMxvEpgXBxuWLYlvwl3ZYMAwGCCqBHM9VAYN1BQADSAAwRQIgG1bSLeOXp3oB8H7b53W+CKOPl2PknmWEq/lMhtn25HkCIQDaHDgWxWFtnCrBjH16/W3Ezn7/U/Vjo5xIpDoiVhsLwg==";
+    uint8_t buf[1024];
+    int len;
+    int ret = 0;
+
+    ret = base64_str_decode(str, strlen(str), buf,&len);
+    if (ret != 0){
+        error_puts("无法解析BASE64字符串");
+        return -1;
+    }
+    printf("expect len = 439, actual len = %d\n", len);
+    print_bytes(buf, len);
+    return 0;
+}
 int main(void)
 {
 	test_base64();
+    test_base64_str_decode();
 	return 0;
 }
 

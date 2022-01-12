@@ -86,7 +86,8 @@ int tlcp_record_set_handshake_server_key_exchange_pke(uint8_t *record, size_t *r
 		error_print();
 		return -1;
 	}
-	tls_array_to_bytes(sig, siglen, &p, &hslen);
+    // signed_param 为一个向量 16bit的向量
+    tls_uint16array_to_bytes(sig, siglen, &p, &hslen);
 	tls_record_set_handshake(record, recordlen, type, NULL, hslen);
 	return 1;
 }
@@ -115,16 +116,11 @@ int tlcp_record_get_handshake_server_key_exchange_pke(const uint8_t *record,
 		error_print();
 		return -1;
 	}
-	/*
-	if (tls_uint16array_copy_from_bytes(sig, siglen, *siglen, &p, &len) != 1
+	if (tls_uint16array_copy_from_bytes(sig, siglen, len-2, &p, &len) != 1
 		|| len > 0) {
 		error_print();
 		return -1;
 	}
-	*/
-	// FIXME: check *siglen >= len
-	memcpy(sig, p, len);
-	*siglen = len;
 	return 1;
 }
 
@@ -180,13 +176,15 @@ int tlcp_certificate_chain_verify(const uint8_t *data, size_t datalen, FILE *ca_
 			return -1;
 		}
 	} else {
-		if (x509_certificate_from_pem_by_name(&ca_cert, ca_certs_fp, &sign_cert.tbs_certificate.issuer) != 1
-			|| x509_certificate_verify_by_certificate(&sign_cert, &ca_cert) != 1) {
+        if (x509_certificate_from_pem_by_name(&ca_cert, ca_certs_fp, &sign_cert.tbs_certificate.issuer) != 1){
+            error_print();
+            return -1;
+        }
+		if (x509_certificate_verify_by_certificate(&sign_cert, &ca_cert) != 1) {
 			error_print();
 			return -1;
 		}
-		if (x509_certificate_from_pem_by_name(&ca_cert, ca_certs_fp, &enc_cert.tbs_certificate.issuer) != 1
-			|| x509_certificate_verify_by_certificate(&enc_cert, &ca_cert) != 1) {
+		if (x509_certificate_verify_by_certificate(&enc_cert, &ca_cert) != 1) {
 			error_print();
 			return -1;
 		}
@@ -595,7 +593,7 @@ int tlcp_accept(TLS_CONNECT *conn, int port,
 		return -1;
 	}
 
-	error_puts("start listen ...");
+    error_print_msg("start listen port %d...", port);
 	listen(sock, 5);
 
 	memset(conn, 0, sizeof(*conn));

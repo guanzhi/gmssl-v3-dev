@@ -61,6 +61,8 @@
 #include <gmssl/oid.h>
 #include <gmssl/asn1.h>
 #include <gmssl/x509.h>
+#include <gmssl/pem.h>
+#include <gmssl/hex.h>
 #include <gmssl/error.h>
 
 
@@ -88,7 +90,7 @@ int x509_certificate_set_serial_number(X509_CERTIFICATE *cert, const uint8_t *sn
 
 int x509_certificate_set_signature_algor_sm2(X509_CERTIFICATE *cert)
 {
-	cert->tbs_certificate.signature_algor = OID_sm2sign_with_sm3;
+	cert->tbs_certificate.signature_algor.algorithm = OID_sm2sign_with_sm3;
 	cert->signature_algor = OID_sm2sign_with_sm3;
 	return 1;
 }
@@ -116,7 +118,7 @@ int x509_certificate_set_validity(X509_CERTIFICATE *cert, time_t not_before, int
 
 int x509_certificate_set_signature_algor(X509_CERTIFICATE *cert, int oid)
 {
-	cert->tbs_certificate.signature_algor = oid;
+	cert->tbs_certificate.signature_algor.algorithm = oid;
 	return 1;
 }
 
@@ -237,4 +239,43 @@ int x509_certificate_from_pem_by_name(X509_CERTIFICATE *cert, FILE *fp, const X5
 		}
 	}
 	return 0;
+}
+
+// 从字节串中解析X509数字证书，支持Base64、Hex、PEM、DER
+int x509_certificate_from_bytes(X509_CERTIFICATE *a, const uint8_t *in, size_t inlen) {
+    uint8_t der[1024];
+    const uint8_t *cp = der;
+
+    size_t der_len = 0;
+    int len = 0;
+
+    const char start_line[] = "-----BEGIN CERTIFICATE-----";
+
+    if (in == NULL || inlen == 0) {
+        return -1;
+    }
+    // 尝试1 DER ASN1 Sequence 格式
+    // Class: 0, P/C=C(1)  tag: 0x10 => 30 (SEQUENCE)
+    if ((in[0] & 0xFF) == 0x30) {
+        return x509_certificate_from_der(a, &in, &inlen);
+    }
+
+    // 尝试2 PEM格式
+    if (strncmp((const char *) in, start_line, strlen(start_line)) == 0) {
+        if (pem_read_str((uint8_t *) in, inlen, "CERTIFICATE", der, &der_len) == 1) {
+            return x509_certificate_from_der(a, &cp, &der_len);
+        }
+    }
+    // 尝试3 Base64格式
+    len = (int)der_len;
+    if (base64_str_decode(in, (int)inlen, der, &len) == 0) {
+        der_len = len;
+        return x509_certificate_from_der(a, &cp, &der_len);
+    }
+    // 尝试4 Hex格式
+    if (hex_to_bytes((const char *) in, inlen, der, &der_len) != -1 ){
+        return x509_certificate_from_der(a, &cp, &der_len);
+    }
+    // 上述手段都无法解码
+    return -1;
 }

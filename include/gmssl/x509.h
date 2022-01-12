@@ -135,7 +135,7 @@ typedef struct {
 	int oids[8];
 	int tags[8];
 
-	char country[3]; // printableString
+	char country[65]; // printableString
 	char state_or_province[129];
 	char locality[129];
 	char org[65];
@@ -169,6 +169,13 @@ AlgorithmIdentifier  ::=  SEQUENCE  {
 	当 algorithm 为 RSA 时，parameters 为 ASN1_NULL 对象
 */
 
+typedef struct {
+    int algorithm;
+    int has_null_obj; // 部分SM2非规范可能含有NULL
+} X509_ALGORITHMIDENTIFIER;
+
+
+
 const char *x509_digest_algor_name(int algor);
 int x509_digest_algor_from_name(const char *name);
 int x509_digest_algor_to_der(int algor, uint8_t **out, size_t *outlen);
@@ -188,6 +195,9 @@ int x509_signature_algor_from_name(const char *name);
 int x509_signature_algor_to_der(int algor, uint8_t **out, size_t *outlen);
 int x509_signature_algor_from_der(int *algor, uint32_t *nodes, size_t *nodes_count,
 	const uint8_t **in, size_t *inlen);
+int x509_signature_algor_null_to_der(int algor, int has_null_obj, uint8_t **out, size_t *outlen);
+int x509_signature_algor_null_from_der(int *algor, int *has_null_obj,  uint32_t *nodes, size_t *nodes_count,
+                                     const uint8_t **in, size_t *inlen);
 
 const char *x509_public_key_encryption_algor_name(int algor);
 int x509_public_key_encryption_algor_from_name(const char *name);
@@ -252,24 +262,20 @@ int x509_extensions_get_next_item(const X509_EXTENSIONS *a, const uint8_t **next
 int x509_extensions_print(FILE *fp, const X509_EXTENSIONS *a, int format, int indent);
 
 
-
-
-
-
 typedef struct {
-	int version;			// [0] EXPLICIT INTEGER DEFAULT v1
-	uint8_t serial_number[20];	// INTEGER
+	int version;			                         // [0] EXPLICIT INTEGER DEFAULT v1
+	uint8_t serial_number[20];	                     // INTEGER
 	size_t serial_number_len;
-	int signature_algor;		// AlgorithmIdentifier
+    X509_ALGORITHMIDENTIFIER signature_algor;		// AlgorithmIdentifier
 	X509_NAME issuer;
 	X509_VALIDITY validity;
 	X509_NAME subject;
 	X509_PUBLIC_KEY_INFO subject_public_key_info;
-	uint8_t issuer_unique_id[64];	// [1] IMPLICIT BIT STRING OPTIONAL
+	uint8_t issuer_unique_id[64];	               // [1] IMPLICIT BIT STRING OPTIONAL
 	size_t issuer_unique_id_len;
-	uint8_t subject_unique_id[64];	// [2] IMPLICIT BIT STRING OPTIONAL
+	uint8_t subject_unique_id[64];	               // [2] IMPLICIT BIT STRING OPTIONAL
 	size_t subject_unique_id_len;
-	X509_EXTENSIONS extensions;	// [3]  EXPLICIT, If present, version MUST be v3
+	X509_EXTENSIONS extensions;                    // [3]  EXPLICIT, If present, version MUST be v3
 } X509_TBS_CERTIFICATE;
 
 int x509_tbs_certificate_to_der(const X509_TBS_CERTIFICATE *a, uint8_t **out, size_t *outlen);
@@ -329,7 +335,14 @@ int x509_certificate_from_pem_by_name(X509_CERTIFICATE *cert, FILE *certs_fp, co
 
 int x509_certificate_verify_by_certificate(const X509_CERTIFICATE *cert, const X509_CERTIFICATE *cacert);
 
-
+/**
+ * 从字节串中解析X509数字证书，支持Base64、Hex、PEM、DER
+ * @param a 证书指针
+ * @param in 待解析字符串、或DER字节串
+ * @param inlen 输入数据长度
+ * @return -1 解析失败；1解析成功
+ */
+int x509_certificate_from_bytes(X509_CERTIFICATE *a,const uint8_t *in, size_t inlen);
 
 
 

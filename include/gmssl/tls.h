@@ -121,10 +121,10 @@ typedef enum {
 	TLCP_cipher_rsa_sm4_gcm_sm3		= 0xe059,
 	TLCP_cipher_rsa_sm4_cbc_sha256		= 0xe01c,
 	TLCP_cipher_rsa_sm4_gcm_sha256		= 0xe05a,
-	GMSSL_cipher_ecdhe_sm2_with_sm4_sm3	= 0xe102,
+	GMSSL_cipher_ecdhe_sm2_with_sm4_sm3	    = 0xe102,
 	GMSSL_cipher_ecdhe_sm2_with_sm4_gcm_sm3	= 0xe107,
 	GMSSL_cipher_ecdhe_sm2_with_sm4_ccm_sm3	= 0xe108,
-	GMSSL_cipher_ecdhe_sm2_with_zuc_sm3	= 0xe10d,
+	GMSSL_cipher_ecdhe_sm2_with_zuc_sm3	    = 0xe10d,
 	TLS_cipher_empty_renegotiation_info_scsv = 0x00ff,
 
 	// TLS 1.3 ciphers (rfc 8446 p.133)
@@ -137,38 +137,38 @@ typedef enum {
 } TLS_CIPHER_SUITE;
 
 typedef enum {
-	TLS_record_invalid		= 0, // TLS 1.3
+	TLS_record_invalid		        = 0, // TLS 1.3
 	TLS_record_change_cipher_spec	= 20,
-	TLS_record_alert		= 21,
-	TLS_record_handshake		= 22,
-	TLS_record_application_data	= 23,
-	TLS_record_heartbeat		= 24,
-	TLS_record_tls12_cid		= 25,
+	TLS_record_alert		        = 21,
+	TLS_record_handshake		    = 22,
+	TLS_record_application_data	    = 23,
+	TLS_record_heartbeat		    = 24,
+	TLS_record_tls12_cid		    = 25,
 } TLS_RECORD_TYPE;
 
 typedef enum  {
-	TLS_handshake_hello_request		= 0,
-	TLS_handshake_client_hello		= 1,
-	TLS_handshake_server_hello		= 2,
-	TLS_handshake_hello_verify_request	= 3,
-	TLS_handshake_new_session_ticket	= 4,
-	TLS_handshake_end_of_early_data		= 5,
-	TLS_handshake_hello_retry_request	= 6,
-	TLS_handshake_encrypted_extensions	= 8,
-	TLS_handshake_certificate		= 11,
-	TLS_handshake_server_key_exchange	= 12,
-	TLS_handshake_certificate_request	= 13,
-	TLS_handshake_server_hello_done		= 14,
-	TLS_handshake_certificate_verify	= 15,
-	TLS_handshake_client_key_exchange	= 16,
-	TLS_handshake_finished			= 20,
-	TLS_handshake_certificate_url		= 21,
-	TLS_handshake_certificate_status	= 22,
-	TLS_handshake_supplemental_data		= 23,
-	TLS_handshake_key_update		= 24,
+	TLS_handshake_hello_request		        = 0,
+	TLS_handshake_client_hello		        = 1,
+	TLS_handshake_server_hello		        = 2,
+	TLS_handshake_hello_verify_request	    = 3,
+	TLS_handshake_new_session_ticket	    = 4,
+	TLS_handshake_end_of_early_data		    = 5,
+	TLS_handshake_hello_retry_request	    = 6,
+	TLS_handshake_encrypted_extensions	    = 8,
+	TLS_handshake_certificate		        = 11,
+	TLS_handshake_server_key_exchange	    = 12,
+	TLS_handshake_certificate_request	    = 13,
+	TLS_handshake_server_hello_done		    = 14,
+	TLS_handshake_certificate_verify	    = 15,
+	TLS_handshake_client_key_exchange	    = 16,
+	TLS_handshake_finished			        = 20,
+	TLS_handshake_certificate_url		    = 21,
+	TLS_handshake_certificate_status	    = 22,
+	TLS_handshake_supplemental_data		    = 23,
+	TLS_handshake_key_update		        = 24,
 	TLS_handshake_compressed_certificate	= 25,
-	TLS_handshake_ekt_key			= 26,
-	TLS_handshake_message_hash		= 254,
+	TLS_handshake_ekt_key			        = 26,
+	TLS_handshake_message_hash		        = 254,
 } TLS_HANDSHAKE_TYPE;
 
 typedef enum {
@@ -316,36 +316,36 @@ typedef enum {
 } TLS_ALERT_LEVEL;
 
 typedef enum {
-	TLS_alert_close_notify		= 0,
-	TLS_alert_unexpected_message	= 10,
-	TLS_alert_bad_record_mac	= 20,
-	TLS_alert_decryption_failed	= 21,
-	TLS_alert_record_overflow	= 22,
-	TLS_alert_decompression_failure	= 30,
-	TLS_alert_handshake_failure	= 40,
-	TLS_alert_no_certificate	= 41,
-	TLS_alert_bad_certificate	= 42,
-	TLS_alert_unsupported_certificate = 43,
-	TLS_alert_certificate_revoked	= 44,
-	TLS_alert_certificate_expired	= 45,
-	TLS_alert_certificate_unknown	= 46,
-	TLS_alert_illegal_parameter	= 47,
-	TLS_alert_unknown_ca		= 48,
-	TLS_alert_access_denied		= 49,
-	TLS_alert_decode_error		= 50,
-	TLS_alert_decrypt_error		= 51,
-	TLS_alert_export_restriction	= 60,
-	TLS_alert_protocol_version	= 70,
-	TLS_alert_insufficient_security	= 71,
-	TLS_alert_internal_error	= 80,
-	TLS_alert_user_canceled		= 90,
-	TLS_alert_no_renegotiation	= 100,
-	TLS_alert_unsupported_site2site	= 200,
-	TLS_alert_no_area		= 201,
-	TLS_alert_unsupported_areatype	= 202,
-	TLS_alert_bad_ibcparam		= 203,
-	TLS_alert_unsupported_ibcparam	= 204,
-	TLS_alert_identity_need		= 205,
+	TLS_alert_close_notify		        = 0,
+	TLS_alert_unexpected_message	    = 10,
+	TLS_alert_bad_record_mac	        = 20,
+	TLS_alert_decryption_failed	        = 21,
+	TLS_alert_record_overflow	        = 22,
+	TLS_alert_decompression_failure	    = 30,
+	TLS_alert_handshake_failure	        = 40,
+	TLS_alert_no_certificate	        = 41,
+	TLS_alert_bad_certificate	        = 42,
+	TLS_alert_unsupported_certificate   = 43,
+	TLS_alert_certificate_revoked	    = 44,
+	TLS_alert_certificate_expired	    = 45,
+	TLS_alert_certificate_unknown	    = 46,
+	TLS_alert_illegal_parameter	        = 47,
+	TLS_alert_unknown_ca		        = 48,
+	TLS_alert_access_denied		        = 49,
+	TLS_alert_decode_error		        = 50,
+	TLS_alert_decrypt_error		        = 51,
+	TLS_alert_export_restriction	    = 60,
+	TLS_alert_protocol_version	        = 70,
+	TLS_alert_insufficient_security	    = 71,
+	TLS_alert_internal_error	        = 80,
+	TLS_alert_user_canceled		        = 90,
+	TLS_alert_no_renegotiation	        = 100,
+	TLS_alert_unsupported_site2site	    = 200,
+	TLS_alert_no_area		            = 201,
+	TLS_alert_unsupported_areatype	    = 202,
+	TLS_alert_bad_ibcparam		        = 203,
+	TLS_alert_unsupported_ibcparam	    = 204,
+	TLS_alert_identity_need		        = 205,
 } TLS_ALERT_DESCRIPTION;
 
 
@@ -446,6 +446,18 @@ typedef struct {
 int tlcp_connect(TLS_CONNECT *conn, const char *hostname, int port,
 	FILE *ca_certs_fp, FILE *client_certs_fp, const SM2_KEY *client_sign_key);
 
+/**
+ * 服务端接受一个TLCP连接
+ * @param conn TLCP连接上下文
+ * @param port 端口
+ * @param server_certs_fp 服务端签名证书和加密证书PEM文件
+ * @param server_sign_key 服务端签名密钥对
+ * @param server_enc_key 服务端加密密钥对
+ * @param client_cacerts_fp 客户端根证书PEM文件，用于验证客户端证书，仅在需要双向身份认证时使用。
+ * @param client_cert_verify_buf 客户端证书校验消息缓冲区，仅在需要双向身份认证时使用。
+ * @param client_cert_verify_buflen 缓冲区长度
+ * @return 1 - 连接成功；-1 - 连接失败
+ */
 int tlcp_accept(TLS_CONNECT *conn, int port,
 	FILE *server_certs_fp, const SM2_KEY *server_sign_key, const SM2_KEY *server_enc_key,
 	FILE *client_cacerts_fp, uint8_t *client_cert_verify_buf, size_t client_cert_verify_buflen);

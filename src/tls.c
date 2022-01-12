@@ -776,13 +776,14 @@ int tls_record_get_handshake_client_hello(const uint8_t *record,
 		uint16_t cipher_suite;
 		tls_uint16_from_bytes(&cipher_suite, &ciphers, &ciphers_len);
 		if (!tls_cipher_suite_name(cipher_suite)) {
-			error_print();
-			return -1;
+			// error_print();
+			// return -1;
+            continue;
 		}
 		*cipher_suites++ = cipher_suite;
 		(*cipher_suites_count)++;
 	}
-	if (len > 0) {
+	if (len > 0 && exts != NULL) {
 		if (*version < TLS_version_tls12) {
 			error_print();
 			return -1;
@@ -1465,9 +1466,9 @@ int tls_record_recv(uint8_t *record, size_t *recordlen, int sock)
 		error_print();
 		return -1;
 	} else if (r != 5) {
-		// FIXME: 如果对方已经中断连接，那么我们要判断这个错误吗? 
-		error_print();
-		perror(""); // 否则打印ioctl错误
+        // 如果对方已经中断连接，那么认为是EOF不做处理，错误原因通过error.h接口获取
+		// error_print();
+		// perror(""); // 否则打印ioctl错误
 		return -1;
 	}
 

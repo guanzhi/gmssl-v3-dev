@@ -337,6 +337,22 @@ static void bn_rand_range(bignum_t r, const bignum_t range)
 	fclose(fp);
 }
 
+/**
+ * 从外部随机源中读取 范围内的大整数
+ *
+ * @param rd    [in] 随机源
+ * @param r     [in] 大整数
+ * @param range [in] 取值范围
+ */
+static void bn_rand_src_range(rand_src rd, bignum_t r, const bignum_t range)
+{
+    uint8_t buf[256];
+    do {
+        rd(buf, 256);
+        bn_from_bytes(r, buf);
+    } while (bn_cmp(r, range) >= 0);
+}
+
 static void fp_add(bignum_t r, const bignum_t a, const bignum_t b)
 {
 	bn_add(r, a, b);
@@ -1446,6 +1462,66 @@ retry:
 	return 1;
 }
 
+
+int sm2_do_sign_ext(rand_src rd, const SM2_KEY *key, const uint8_t dgst[32], SM2_SIGNATURE *sig)
+{
+    point_t _P, *P = &_P;
+    bignum_t d;
+    bignum_t e;
+    bignum_t k;
+    bignum_t x;
+    bignum_t r;
+    bignum_t s;
+
+    if (!key || !dgst || !sig) {
+        return -1;
+    }
+
+    bn_from_bytes(d, key->private_key);
+
+    // e = H(M)
+    bn_from_bytes(e, dgst);		//print_bn("e", e);
+
+retry:
+
+    // rand k in [1, n - 1]
+    do {
+        bn_rand_src_range(rd, k, SM2_N);
+    } while (bn_is_zero(k));
+    //print_bn("k", k);
+
+    // (x, y) = kG
+    point_mul_generator(P, k);
+    point_get_xy(P, x, NULL);	//print_bn("x", x);
+
+
+    // r = e + x (mod n)
+    fn_add(r, e, x);		//print_bn("r = e + x (mod n)", r);
+
+    /* if r == 0 or r + k == n re-generate k */
+    if (bn_is_zero(r)) {
+        goto retry;
+    }
+    bn_add(x, r, k);
+    if (bn_cmp(x, SM2_N) == 0) {
+        goto retry;
+    }
+
+    /* s = ((1 + d)^-1 * (k - r * d)) mod n */
+
+    fn_mul(e, r, d);		//print_bn("r*d", e);
+    fn_sub(k, k, e);		//print_bn("k-r*d", k);
+    fn_add(e, ONE, d);		//print_bn("1 +d", e);
+    fn_inv(e, e);			//printf("(1+d)^-1", e);
+    fn_mul(s, e, k);		//print_bn("s = ((1 + d)^-1 * (k - r * d)) mod n", s);
+
+    bn_clean(d);
+    bn_clean(k);
+    bn_to_bytes(r, sig->r);		//print_bn("r", r);
+    bn_to_bytes(s, sig->s);		//print_bn("s", s);
+    return 1;
+}
+
 int sm2_do_verify(const SM2_KEY *key, const uint8_t dgst[32], const SM2_SIGNATURE *sig)
 {
 	point_t _P, *P = &_P;
@@ -1497,7 +1573,7 @@ int sm2_do_verify(const SM2_KEY *key, const uint8_t dgst[32], const SM2_SIGNATUR
 	if (bn_cmp(e, r) == 0) {
 		return 1;
 	} else {
-		error_print(); // 此处不应该打印错误，因为验证失败是预期的返回结果之一
+		// error_print(); // 此处不应该打印错误，因为验证失败是预期的返回结果之一
 		return 0;
 	}
 }
@@ -1589,6 +1665,56 @@ int sm2_do_encrypt(const SM2_KEY *key, const uint8_t *in, size_t inlen, SM2_CIPH
 	sm3_finish(&sm3_ctx, out->hash);
 
 	return 1;
+}
+
+int sm2_do_encrypt_ext(rand_src rd, const SM2_KEY *key, const uint8_t *in, size_t inlen, SM2_CIPHERTEXT *out)
+{
+    bignum_t k;
+    point_t _P, *P = &_P;
+    SM3_CTX sm3_ctx;
+    uint8_t buf[64];
+    int i;
+
+    if (!key || !in || !inlen || !out) {
+        return -1;
+    }
+
+    // rand k in [1, n - 1]
+    do {
+        bn_rand_src_range(rd, k, SM2_N);
+    } while (bn_is_zero(k));
+
+    // C1 = k * G = (x1, y1)
+    point_mul_generator(P, k);
+    point_to_bytes(P, (uint8_t *)&out->point);
+
+
+    // Q = k * P = (x2, y2)
+    point_from_bytes(P, (uint8_t *)&key->public_key);
+
+    point_mul(P, k, P);
+
+    point_to_bytes(P, buf);
+
+
+    // t = KDF(x2 || y2, klen)
+    sm2_kdf(buf, sizeof(buf), inlen, out->ciphertext);
+
+
+    // C2 = M xor t
+    for (i = 0; i < inlen; i++) {
+        out->ciphertext[i] ^= in[i];
+    }
+    out->ciphertext_size = (uint32_t)inlen;
+
+    // C3 = Hash(x2 || m || y2)
+    sm3_init(&sm3_ctx);
+    sm3_update(&sm3_ctx, buf, 32);
+    sm3_update(&sm3_ctx, in, inlen);
+    sm3_update(&sm3_ctx, buf + 32, 32);
+    sm3_finish(&sm3_ctx, out->hash);
+
+    return 1;
 }
 
 int sm2_do_decrypt(const SM2_KEY *key, const SM2_CIPHERTEXT *in, uint8_t *out, size_t *outlen)

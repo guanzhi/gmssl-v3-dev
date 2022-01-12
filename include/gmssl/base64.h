@@ -89,6 +89,15 @@ int  base64_decode_finish(BASE64_CTX *ctx, uint8_t *out, int *outlen);
 int base64_encode_block(unsigned char *t, const unsigned char *f, int dlen);
 int base64_decode_block(unsigned char *t, const unsigned char *f, int n);
 
+/**
+ * Base64字符串解码
+ * @param in  Base64字符串
+ * @param inlen 字符串长度
+ * @param out  解码存储位置
+ * @param outlen  解码后字节长度
+ * @return 0 解码成功;-1 解码异常
+ */
+int base64_str_decode(const uint8_t *in, int inlen, uint8_t *out, int *outlen);
 
 #ifdef __cplusplus
 }
