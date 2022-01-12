@@ -144,9 +144,9 @@ int main(void) {
         error_puts("cert and key load fail.");
         return 1;
     }
-    server_test();
+//    server_test();
 //    client_conn_test();
-//    client_auth_test();
+    client_auth_test();
 
     return 1;
 }
@@ -200,7 +200,7 @@ static void server_test() {
 
 
 static void handle_echo(TLCP_SOCKET_CONNECT *conn) {
-    ssize_t  n                        = 0;
+    ssize_t n                        = 0;
     uint8_t buf[TLS_MAX_RECORD_SIZE] = {0};
 
     n = sizeof(buf);
@@ -342,7 +342,7 @@ static void client_auth_test() {
     ssize_t             n        = 16;
     size_t              i        = 0;
     errno                        = 0;
-
+    clock_t start, end;
 
     if (TLCP_SOCKET_GMSSL_Key(&key, &client_cert, &client_key) == -1) {
         perror("TLCP_SOCKET_GMSSL_Key() ERROR");
@@ -355,21 +355,26 @@ static void client_auth_test() {
     for (i = 0; i < n; ++i) {
         buff[i] = i;
     }
-    // 拨号连接服务端
-    ret = TLCP_SOCKET_Dial(&ctx, &conn, "127.0.0.1", 30443);
-    if (ret != 1) {
-        error_print();
-        return;
-    }
+    start  = clock();
+    for (i = 0; i < 1000; i++) {
+        // 拨号连接服务端
+        ret = TLCP_SOCKET_Dial(&ctx, &conn, "127.0.0.1", 30443);
+        if (ret != 1) {
+            error_print();
+            return;
+        }
 
-    if ((n = TLCP_SOCKET_Write(&conn, buff, n)) < 0) {
-        perror("TLCP_SOCKET_Write() ERROR");
-        return;
+        if ((n = TLCP_SOCKET_Write(&conn, buff, n)) < 0) {
+            perror("TLCP_SOCKET_Write() ERROR");
+            return;
+        }
+        if ((n = TLCP_SOCKET_Read(&conn, buff, n)) < 0) {
+            perror("TLCP_SOCKET_Read() ERROR");
+            return;
+        }
+        // print_bytes(buff, n);
+        TLCP_SOCKET_Connect_Close(&conn);
     }
-    if ((n = TLCP_SOCKET_Read(&conn, buff, n)) < 0) {
-        perror("TLCP_SOCKET_Read() ERROR");
-        return;
-    }
-    print_bytes(buff, n);
-    TLCP_SOCKET_Connect_Close(&conn);
+    end    = clock();
+    printf(">> Cost: %.2f s\n", (double)(end - start) / CLOCKS_PER_SEC);
 }

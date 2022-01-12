@@ -58,11 +58,9 @@ static const int    tlcp_ciphers[]     = {TLCP_cipher_ecc_sm4_cbc_sm3};
 static const size_t tlcp_ciphers_count = sizeof(tlcp_ciphers) / sizeof(tlcp_ciphers[0]);
 
 
-static int tlcp_socket_record_recv(TLCP_SOCKET_CONNECT *conn ,uint8_t *record, size_t *recordlen)
-{
+static int tlcp_socket_record_recv(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
     ssize_t r;
-    int type;
-    size_t len;
+    size_t  len;
 
     if ((r = recv(conn->sock, record, 5, 0)) < 0) {
         error_print();
@@ -82,7 +80,7 @@ static int tlcp_socket_record_recv(TLCP_SOCKET_CONNECT *conn ,uint8_t *record, s
         error_print_msg("invalid record version: %d.%d\n", record[1], record[2]);
         return -1;
     }
-    len = (size_t)record[3] << 8 | record[4];
+    len = (size_t) record[3] << 8 | record[4];
     *recordlen = 5 + len;
     if (len) {
         if ((r = recv(conn->sock, record + 5, len, 0)) < 0) {
@@ -107,7 +105,7 @@ static int tlcp_socket_record_recv(TLCP_SOCKET_CONNECT *conn ,uint8_t *record, s
  * @return 1 - 成功；-1 - 失败
  */
 static int tlcp_socket_read_handshake(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
-    if (tlcp_socket_record_recv(conn,record, recordlen) != 1) {
+    if (tlcp_socket_record_recv(conn, record, recordlen) != 1) {
         return -1;
     }
     // 报警协议部署于握手协议消息
@@ -477,6 +475,7 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t **
     *outlen += recordlen;
     record    = *out;
     recordlen = 0;
+    tls_record_set_version(record, TLS_version_tlcp);
 
     // tls_trace(">>>> ServerFinished\n");
     sm3_finish(conn->_sm3_ctx, sm3_hash);
@@ -943,7 +942,6 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
         // 需要客户端认证
         *need_auth = 1;
     }
-    // tls_trace("<<<< ServerHelloDone\n");
     if (tls_record_get_handshake_server_hello_done(record) != 1) {
         error_print();
         return -1;
@@ -953,13 +951,17 @@ int tlcp_socket_read_cert_req_server_done(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONN
 }
 
 int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
-                                          uint8_t *record, size_t *recordlen,
+                                          uint8_t **out, size_t *outlen,
                                           X509_CERTIFICATE *server_enc_cert) {
+    uint8_t *record   = *out;
+    size_t  recordlen = 0;
+
     SM2_KEY server_enc_key               = {0};
     uint8_t pre_master_secret[48]        = {0};
     uint8_t enced_pre_master_secret[256] = {0};
     size_t  enced_pre_master_secret_len  = {0};
 
+    tls_record_set_version(record, conn->version);
     if (tls_pre_master_secret_generate(pre_master_secret, TLS_version_tlcp) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_internal_error);
@@ -978,17 +980,15 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
     }
-    if (tls_record_set_handshake_client_key_exchange_pke(record, recordlen,
+    if (tls_record_set_handshake_client_key_exchange_pke(record, &recordlen,
                                                          enced_pre_master_secret, enced_pre_master_secret_len) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
     }
-    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
-        error_print();
-        return -1;
-    }
-    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+    sm3_update(conn->_sm3_ctx, record + 5, recordlen - 5);
+    *out += recordlen;
+    *outlen += recordlen;
 
     // tls_trace("++++ generate secrets\n");
     if (tls_prf(pre_master_secret, 48, "master secret",
@@ -1012,22 +1012,27 @@ int tlcp_socket_write_client_key_exchange(TLCP_SOCKET_CONNECT *conn,
 }
 
 
-int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen) {
+int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t **out, size_t *outlen) {
+    uint8_t *record   = *out;
+    size_t  recordlen = 0;
+
     SM3_CTX tmp_sm3_ctx;
     uint8_t sm3_hash[32];
     uint8_t verify_data[12];
     uint8_t finished[256];
     size_t  finishedlen;
 
+    tls_record_set_version(record, conn->version);
     // tls_trace(">>>> [ChangeCipherSpec]\n");
-    if (tls_record_set_change_cipher_spec(record, recordlen) != 1) {
+    if (tls_record_set_change_cipher_spec(record, &recordlen) != 1) {
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
     }
-    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
-        error_print();
-        return -1;
-    }
+    *out += recordlen;
+    *outlen += recordlen;
+    record   = *out;
+    recordlen = 0;
+    tls_record_set_version(record, conn->version);
 
     // tls_trace(">>>> Finished\n");
     memcpy(&tmp_sm3_ctx, conn->_sm3_ctx, sizeof(SM3_CTX));
@@ -1049,16 +1054,15 @@ int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *r
     sm3_update(conn->_sm3_ctx, finished + 5, finishedlen - 5);
 
     if (tls_record_encrypt(&conn->_client_write_mac_ctx, &conn->_client_write_enc_key,
-                           conn->_client_seq_num, finished, finishedlen, record, recordlen) != 1) {
+                           conn->_client_seq_num, finished, finishedlen, record, &recordlen) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_decode_error);
         return -1;
     }
     tls_seq_num_incr(conn->_client_seq_num);
-    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
-        error_print();
-        return -1;
-    }
+
+    *out += recordlen;
+    *outlen += recordlen;
     return 1;
 }
 
@@ -1125,7 +1129,9 @@ int tlcp_socket_read_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
 
 
 int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                         uint8_t *record, size_t *recordlen) {
+                                         uint8_t **out, size_t *outlen) {
+    uint8_t *record   = *out;
+    size_t  recordlen = 0;
 
     int     type     = TLS_handshake_certificate;
     uint8_t *data    = record + 5 + 4;
@@ -1136,6 +1142,7 @@ int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     uint8_t *cp      = der;
     size_t  derlen   = 0;
 
+    tls_record_set_version(record, conn->version);
     // 序列化签名证书DER
     if (x509_certificate_to_der(ctx->client_sig_key->cert, &cp, &derlen) != 1) {
         tlcp_socket_alert(conn, TLS_alert_internal_error);
@@ -1146,17 +1153,19 @@ int tlcp_socket_write_client_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
 
     datalen = certslen;
     tls_uint24_to_bytes((uint24_t) certslen, &data, &datalen);
-    tls_record_set_handshake(record, recordlen, type, NULL, datalen);
-    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
-        error_print();
-        return -1;
-    }
-    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+    tls_record_set_handshake(record, &recordlen, type, NULL, datalen);
+    sm3_update(conn->_sm3_ctx, record + 5, recordlen - 5);
+
+    *out += recordlen;
+    *outlen += recordlen;
     return 1;
 }
 
 int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                         uint8_t *record, size_t *recordlen) {
+                                         uint8_t **out, size_t *outlen) {
+    uint8_t         *record                                = *out;
+    size_t          recordlen                              = 0;
+
     SM3_CTX         tmp_sm3_ctx;
     TLCP_SOCKET_KEY *sig_key                               = ctx->client_sig_key;
     uint8_t         sig[TLS_MAX_SIGNATURE_SIZE]            = {0};
@@ -1166,7 +1175,7 @@ int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     uint8_t         *p                                     = sig_vector;    // 向量指针
     size_t          sig_vector_len                         = 0;
 
-
+    tls_record_set_version(record, conn->version);
     memcpy(&tmp_sm3_ctx, conn->_sm3_ctx, sizeof(SM3_CTX));
     sm3_finish(&tmp_sm3_ctx, msg);
     /*
@@ -1187,16 +1196,15 @@ int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
     }
     // 签名值是一个向量
     tls_uint16array_to_bytes(sig, siglen, &p, &sig_vector_len);
-    if (tls_record_set_handshake_certificate_verify(record, recordlen, sig_vector, sig_vector_len) != 1) {
+    if (tls_record_set_handshake_certificate_verify(record, &recordlen, sig_vector, sig_vector_len) != 1) {
         error_print();
         tlcp_socket_alert(conn, TLS_alert_internal_error);
         return -1;
     }
-    if (tls_record_send(record, *recordlen, conn->sock) != 1) {
-        error_print();
-        return -1;
-    }
-    sm3_update(conn->_sm3_ctx, record + 5, *recordlen - 5);
+
+    sm3_update(conn->_sm3_ctx, record + 5, recordlen - 5);
+    *out += recordlen;
+    *outlen += recordlen;
     return 1;
 }
 
