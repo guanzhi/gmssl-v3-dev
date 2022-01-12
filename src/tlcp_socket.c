@@ -257,7 +257,6 @@ ssize_t TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
 
     if (conn->_buf_remain == 0) {
         if (tlcp_socket_read_app_data(conn) != 1) {
-            error_print();
             return -1;
         }
         // 对读取的消息进行错误处理
