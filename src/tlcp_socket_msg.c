@@ -475,7 +475,6 @@ int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t **
     *outlen += recordlen;
     record    = *out;
     recordlen = 0;
-    tls_record_set_version(record, TLS_version_tlcp);
 
     // tls_trace(">>>> ServerFinished\n");
     sm3_finish(conn->_sm3_ctx, sm3_hash);
@@ -1032,7 +1031,6 @@ int tlcp_socket_write_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t **
     *outlen += recordlen;
     record   = *out;
     recordlen = 0;
-    tls_record_set_version(record, conn->version);
 
     // tls_trace(">>>> Finished\n");
     memcpy(&tmp_sm3_ctx, conn->_sm3_ctx, sizeof(SM3_CTX));

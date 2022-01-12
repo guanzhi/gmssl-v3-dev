@@ -144,9 +144,9 @@ int main(void) {
         error_puts("cert and key load fail.");
         return 1;
     }
-//    server_test();
+    server_test();
 //    client_conn_test();
-    client_auth_test();
+//    client_auth_test();
 
     return 1;
 }
@@ -172,9 +172,6 @@ static void server_test() {
     ctx.server_enc_key = &socket_enckey;
 
     /* 配置根证书表示需要对客户端进行身份认证 */
-//    ctx.root_certs    = &cacert;
-//    ctx.root_cert_len = 1;
-
     /* 多个根证书 */
     X509_CERTIFICATE roots[] = {cacert, rootcert};
     ctx.root_certs    = roots;
@@ -356,7 +353,7 @@ static void client_auth_test() {
         buff[i] = i;
     }
     start  = clock();
-    for (i = 0; i < 1000; i++) {
+    for (i = 0; i < 1; i++) {
         // 拨号连接服务端
         ret = TLCP_SOCKET_Dial(&ctx, &conn, "127.0.0.1", 30443);
         if (ret != 1) {
