@@ -72,7 +72,7 @@ int TLCP_SOCKET_Listen(TLCP_SOCKET_CTX *ctx, int port) {
         error_print();
         return -1;
     }
-    error_print_msg("TLCP Socket listen in port %d\n", port);
+    // printf("TLCP Socket listen in port %d\n", port);
     return TLCP_SOCKET_Listen_raw(ctx, sock);
 }
 
@@ -116,15 +116,17 @@ void TLCP_SOCKET_Close(TLCP_SOCKET_CTX *ctx) {
  * @return 1 - 连接成功; -1 - 连接失败
  */
 int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
-    uint8_t            record[TLS_MAX_RECORD_SIZE]                = {0};
-    size_t             recordlen                                  = 0;
-    uint8_t            server_enc_cert[TLS_MAX_CERTIFICATES_SIZE] = {0};
-    size_t             server_enc_certlen                         = 0;
-    uint8_t            need_client_auth                           = 0;
-    struct sockaddr_in client_addr                                = {0};
-    socklen_t          client_addrlen                             = sizeof(client_addr);
-    SM3_CTX            sm3_ctx                                    = {0}; // 握手消息Hash
-    X509_CERTIFICATE   client_cert                                = {0};
+    SM3_CTX            sm3_ctx        = {0}; // 握手消息Hash
+    X509_CERTIFICATE   client_cert    = {0};
+    struct sockaddr_in client_addr    = {0};
+    socklen_t          client_addrlen = sizeof(client_addr);
+
+    uint8_t buf[TLS_MAX_RECORD_SIZE]                   = {0};
+    uint8_t server_enc_cert[TLS_MAX_CERTIFICATES_SIZE] = {0};
+    uint8_t need_client_auth                           = 0;
+    size_t  server_enc_certlen                         = 0;
+    size_t  buf_len                                    = 0;
+    uint8_t *p                                         = buf;
 
 
     if (ctx == NULL || conn == NULL) {
@@ -146,80 +148,96 @@ int TLCP_SOCKET_Accept(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn) {
     conn->entity    = TLCP_SOCKET_SERVER_END;
     conn->connected = TLCP_SOCKET_UNCONNECTED;
 
-    tls_trace("<<<< ClientHello\n");
-    if (tlcp_socket_read_client_hello(conn, record, &recordlen) != 1) {
+    // tls_trace("<<<< ClientHello\n");
+    if (tlcp_socket_read_client_hello(conn, buf, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
 
-    tls_trace(">>>> ServerHello\n");
-    if (tlcp_socket_write_server_hello(conn, ctx->rand, record, &recordlen) != 1) {
+    buf_len = 0;
+    // tls_trace(">>>> ServerHello\n");
+    if (tlcp_socket_write_server_hello(conn, ctx->rand, &p, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
 
-    tls_trace(">>>> ServerCertificate\n");
-    if (tlcp_socket_write_server_certificate(ctx, conn, record, &recordlen,
+    // tls_trace(">>>> ServerCertificate\n");
+    if (tlcp_socket_write_server_certificate(ctx, conn, &p, &buf_len,
                                              server_enc_cert, &server_enc_certlen) != 1) {
         close(conn->sock);
         return -1;
     }
 
-    tls_trace(">>>> ServerKeyExchange\n");
+    // tls_trace(">>>> ServerKeyExchange\n");
     if (tlcp_socket_write_server_key_exchange(conn, ctx->server_sig_key,
-                                              record, &recordlen,
+                                              &p, &buf_len,
                                               server_enc_cert, server_enc_certlen) != 1) {
         close(conn->sock);
         return -1;
     }
 
     if (need_client_auth) {
-        tls_trace(">>>> CertificateRequest\n");
+        // tls_trace(">>>> CertificateRequest\n");
         // Certificate Request消息
-        if (tlcp_socket_write_cert_req(ctx, conn, record, &recordlen) != 1) {
+        if (tlcp_socket_write_cert_req(ctx, conn, &p, &buf_len) != 1) {
             close(conn->sock);
             return -1;
         }
     }
 
-    tls_trace(">>>> ServerHelloDone\n");
-    if (tlcp_socket_write_server_hello_done(conn, record, &recordlen) != 1) {
+    // tls_trace(">>>> ServerHelloDone\n");
+    if (tlcp_socket_write_server_hello_done(conn, &p, &buf_len) != 1) {
         close(conn->sock);
+        return -1;
+    }
+
+    if (tlcp_socket_send_records(conn, buf, buf_len) != 1) {
+        error_print();
         return -1;
     }
 
     if (need_client_auth) {
         // Client Certificate消息
-        tls_trace("<<<< ClientCertificate\n");
-        if (tlcp_socket_read_client_cert(conn, record, &recordlen, &client_cert) != 1){
+        // tls_trace("<<<< ClientCertificate\n");
+        if (tlcp_socket_read_client_cert(conn, buf, &buf_len, &client_cert) != 1) {
             close(conn->sock);
             return -1;
         }
     }
-    tls_trace("<<<< ClientKeyExchange\n");
-    if (tlcp_socket_read_client_key_exchange(conn, ctx->server_enc_key, record, &recordlen) != 1) {
+    // tls_trace("<<<< ClientKeyExchange\n");
+    if (tlcp_socket_read_client_key_exchange(conn, ctx->server_enc_key, buf, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
 
     if (need_client_auth) {
-        tls_trace("<<<< CertificateVerify\n");
+        // tls_trace("<<<< CertificateVerify\n");
         // 验证 Certificate Verify消息
-        if(tlcp_socket_read_client_cert_verify(conn,record, &recordlen, &client_cert) != 1) {
+        if (tlcp_socket_read_client_cert_verify(conn, buf, &buf_len, &client_cert) != 1) {
             close(conn->sock);
             return -1;
         }
     }
+
     // 读取并处理密钥变更消息和客户端finished消息
-    if (tlcp_socket_read_client_spec_finished(conn, record, &recordlen) != 1) {
+    if (tlcp_socket_read_client_spec_finished(conn, buf, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
+
+    p = buf;
+    buf_len = 0;
     // 服务端变更密码协议，发送finished消息
-    if (tlcp_socket_write_server_spec_finished(conn, record, &recordlen) != 1) {
+    if (tlcp_socket_write_server_spec_finished(conn, &p, &buf_len) != 1) {
         close(conn->sock);
         return -1;
     }
+
+    if (tlcp_socket_send_records(conn, buf, buf_len) != 1) {
+        error_print();
+        return -1;
+    }
+
     conn->connected = TLCP_SOCKET_CONNECTED;
     conn->_sm3_ctx  = NULL;
     return 1;
@@ -245,9 +263,7 @@ ssize_t TLCP_SOCKET_Read(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count) {
         // 对读取的消息进行错误处理
         if (conn->record[0] == TLS_record_alert) {
             switch (conn->record[0]) {
-                case TLS_alert_level_warning:
-                    // 忽略错误继续读取
-//                    return TLCP_SOCKET_Read(conn, buf, count);
+                case TLS_alert_level_warning:               // 也当做fatal处理
                 case TLS_alert_level_fatal:
                     if (conn->record[1] == TLS_alert_close_notify) {
                         return EOF;
@@ -338,17 +354,17 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
     tls_record_set_version(record, TLS_version_tlcp);
 
     // 开始握手
-    tls_trace(">>>> ClientHello\n");
+    // tls_trace(">>>> ClientHello\n");
     if (tlcp_socket_write_client_hello(ctx, conn, record, &recordlen) != 1) {
         close(conn->sock);
         return -1;
     }
-    tls_trace("<<<< ServerHello\n");
+    // tls_trace("<<<< ServerHello\n");
     if (tlcp_socket_read_server_hello(conn, record, &recordlen) != 1) {
         close(conn->sock);
         return -1;
     }
-    tls_trace("<<<< ServerCertificate\n");
+    // tls_trace("<<<< ServerCertificate\n");
     if (tlcp_socket_read_server_certs(ctx, conn,
                                       record, &recordlen,
                                       server_certs,
@@ -356,7 +372,7 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
         close(conn->sock);
         return -1;
     }
-    tls_trace("<<<< ServerKeyExchange\n");
+    // tls_trace("<<<< ServerKeyExchange\n");
     if (tlcp_socket_read_server_key_exchange(conn,
                                              record, &recordlen,
                                              &server_certs[0],
@@ -376,13 +392,13 @@ int TLCP_SOCKET_Dial(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn, const char
             return -1;
         }
     }
-    tls_trace(">>>> ClientKeyExchange\n");
+    // tls_trace(">>>> ClientKeyExchange\n");
     if (tlcp_socket_write_client_key_exchange(conn, record, &recordlen, &server_certs[1]) != 1) {
         close(conn->sock);
         return -1;
     }
     if (need_auth == 1) {
-        tls_trace(">>>> CertificateVerify\n");
+        // tls_trace(">>>> CertificateVerify\n");
         // 生成并发送证书验证消息
         if (tlcp_socket_write_client_cert_verify(ctx, conn, record, &recordlen) != 1) {
             close(conn->sock);

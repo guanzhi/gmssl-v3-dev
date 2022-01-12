@@ -72,26 +72,26 @@ int tlcp_socket_read_client_hello(TLCP_SOCKET_CONNECT *conn, uint8_t *record, si
  *
  * @param conn          [in,out] 连接对象
  * @param randFnc       [in] 随机源
- * @param record        [in] 收到的记录层数据
- * @param recordlen     [in] 记录层数据
+ * @param out           [in,out] 缓冲区，写入后会产生偏移。
+ * @param outlen        [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
 int tlcp_socket_write_server_hello(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_RandBytes_FuncPtr randFnc,
-                                   uint8_t *record, size_t *recordlen);
+                                   uint8_t **out, size_t *outlen);
 
 /**
  * 写入服务端证书消息
  *
  * @param ctx                       [in] 上下文
  * @param conn                      [in,out] 连接对象
- * @param record                    [in] 收到的记录层数据
- * @param recordlen                 [in] 记录层数据
+ * @param out                       [in,out] 缓冲区，写入后会产生偏移。
+ * @param outlen                    [in,out] 缓冲区长度，写入后增加写入长度。
  * @param server_enc_cert           [out] 加密证书DER
  * @param server_enc_certlen        [out] 加密证书DER长度
  * @return 1 - 成功；-1 - 失败
  */
 int tlcp_socket_write_server_certificate(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                                         uint8_t *record, size_t *recordlen,
+                                         uint8_t **out, size_t *outlen,
                                          uint8_t *server_enc_cert, size_t *server_enc_certlen);
 
 /**
@@ -108,25 +108,25 @@ int tlcp_socket_random_generate(TLCP_SOCKET_RandBytes_FuncPtr randFnc, uint8_t r
  * 写入服务端密钥交换消息
  * @param conn                  [in] 连接上下文
  * @param sig_key               [in] 签名密钥对
- * @param record                [in] 收到的记录层数据
- * @param recordlen             [in] 记录层数据
+ * @param out                   [in,out] 缓冲区，写入后会产生偏移。
+ * @param outlen                [in,out] 缓冲区长度，写入后增加写入长度。
  * @param server_enc_cert       [in] 加密证书DER
  * @param server_enc_certlen    [in] 加密证书DER长度
  * @return 1 - 成功；-1 - 失败
  */
 int tlcp_socket_write_server_key_exchange(TLCP_SOCKET_CONNECT *conn, TLCP_SOCKET_KEY *sig_key,
-                                          uint8_t *record, size_t *recordlen,
+                                          uint8_t **out, size_t *outlen,
                                           uint8_t *server_enc_cert, size_t server_enc_certlen);
 
 /**
  * 写入服务端DONE消息
  *
  * @param conn              [in] 连接上下文
- * @param record            [in] 收到的记录层数据
- * @param recordlen         [in] 记录层数据
+ * @param out               [in,out] 缓冲区，写入后会产生偏移。
+ * @param outlen            [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_hello_done(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
+int tlcp_socket_write_server_hello_done(TLCP_SOCKET_CONNECT *conn,  uint8_t **out, size_t *outlen);
 
 /**
  * 读取客户端密钥交换消息
@@ -156,11 +156,11 @@ int tlcp_socket_read_client_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *re
  * 写入服务端密钥变更消息和Finished消息
  *
  * @param conn      [in] 连接上下文
- * @param record    [in] 收到的记录层数据
- * @param recordlen [in] 记录层数据
+ * @param out       [in,out] 缓冲区，写入后会产生偏移。
+ * @param outlen    [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
-int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t *record, size_t *recordlen);
+int tlcp_socket_write_server_spec_finished(TLCP_SOCKET_CONNECT *conn, uint8_t **out, size_t *outlen);
 
 
 /**
@@ -327,12 +327,12 @@ int tlcp_socket_write_client_cert_verify(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNE
  *
  * @param ctx                   [in] 上下文
  * @param conn                  [in] socket连接
- * @param record                [in,out] 记录层数据
- * @param recordlen             [in,out] 记录层数据长度
+ * @param out                   [in,out] 缓冲区，写入后会产生偏移。
+ * @param outlen                [in,out] 缓冲区长度，写入后增加写入长度。
  * @return 1 - 成功；-1 - 失败
  */
 int tlcp_socket_write_cert_req(TLCP_SOCKET_CTX *ctx, TLCP_SOCKET_CONNECT *conn,
-                               uint8_t *record, size_t *recordlen);
+                               uint8_t **out, size_t *outlen);
 
 /**
  * 读取客户端证书消息
@@ -359,6 +359,16 @@ int tlcp_socket_read_client_cert(TLCP_SOCKET_CONNECT *conn,
 int tlcp_socket_read_client_cert_verify(TLCP_SOCKET_CONNECT *conn,
                                         uint8_t *record, size_t *recordlen,
                                         X509_CERTIFICATE *client_cert);
+
+/**
+ * 发送粘黏在一起的记录层数据
+ *
+ * @param conn [in] 连接对象
+ * @param buff [in] 缓冲区
+ * @param records_len [in] 多个记录层数据包的总长度
+ * @return  1 - 成功；-1 - 失败
+ */
+int tlcp_socket_send_records(TLCP_SOCKET_CONNECT  *conn,const uint8_t *buff, size_t records_len);
 
 #ifdef  __cplusplus
 }
