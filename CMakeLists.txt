@@ -122,84 +122,6 @@ add_library(
         src/tlcp_socket_key.c
 )
 
-
-SET(
-        LibSrc
-
-        src/hex.c
-        src/debug.c
-        src/rand.c
-
-        # default sm algors
-        src/sm2_algo.c
-        src/sm2_lib.c
-        src/sm2_asn1.c
-        src/sm2_prn.c
-        src/sm3.c
-        src/sm3_hmac.c
-        src/sm4_common.c
-        src/sm4_setkey.c
-        src/sm4_enc.c
-        src/sm4_modes.c
-
-        # optional sm algors
-        src/sm9_math.c
-        src/zuc_core.c
-        src/zuc_eea.c
-        src/zuc_eia.c
-
-        # optional nist algors
-        src/aes.c
-        src/aes_modes.c
-        src/chacha20.c
-        src/sha256.c
-        src/sha512.c
-
-        # legacy algors
-        src/rc4.c
-        src/des.c
-        src/md5.c
-        src/sha1.c
-
-        # schemes
-        src/hash_drbg.c
-        src/hmac.c
-
-        # abstract
-        src/digest.c
-        src/block_cipher.c
-
-        # pkix
-        src/oid.c
-        src/asn1.c
-        src/base64.c
-        src/pem.c
-        src/pbkdf2.c
-        src/pkcs8.c
-        src/x509_lib.c
-        src/x509_asn1.c
-        src/x509_ext.c
-        src/x509_algor.c
-        src/cms.c
-
-        # for tls 1.3
-        src/hkdf.c
-        src/gf128.c
-        src/gcm.c
-
-        # ssl/tls/tlcp
-        src/tls.c
-        src/tls_trace.c
-        src/tls12.c
-        src/tlcp.c
-        src/tls13.c
-
-        #  tlcp socket
-        src/tlcp_socket.c
-        src/tlcp_socket_msg.c
-        src/tlcp_socket_key.c
-)
-
 SET_TARGET_PROPERTIES(gmssl PROPERTIES VERSION 3.0 SOVERSION 3)
 
 
@@ -350,8 +272,8 @@ target_link_libraries(pemtest LINK_PUBLIC gmssl)
 add_executable(x509_verify tests/x509_verify.c)
 target_link_libraries(x509_verify LINK_PUBLIC gmssl)
 
-add_executable(tlcp_socket_test ${LibSrc} tests/tlcpsockettest.c)
-#target_link_libraries(tlcp_socket_test LINK_PUBLIC gmssl)
+add_executable(tlcp_socket_test tests/tlcpsockettest.c)
+target_link_libraries(tlcp_socket_test LINK_PUBLIC gmssl)
 
 enable_testing()
 add_test(NAME aes COMMAND aestest)

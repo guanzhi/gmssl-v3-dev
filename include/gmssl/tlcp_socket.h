@@ -214,22 +214,22 @@ typedef struct {
 /**
  * 创建 TLCP listener接收TLCP连接
  *
- * @param ctx  [in,out] TLCP上下文
- * @param ln   [out] 连接监听器
- * @param port [in]     服务监听端口
+ * @param config    [in,out] 配置信息
+ * @param ln        [out] 连接监听器
+ * @param port      [in]     服务监听端口
  * @return 1 - 读取成功；-1 - 读取失败
  */
-int TLCP_SOCKET_Listen(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_Listener *ln, int port);
+int TLCP_SOCKET_Listen(TLCP_SOCKET_CONFIG *config, TLCP_SOCKET_Listener *ln, int port);
 
 /**
  * 通过文件描述符创建 TLCP listener接收TLCP连接
  *
- * @param ctx [in,out] TLCP上下文
- * @param ln  [out] 连接监听器
- * @param fd  [in]     文件描述符，如socket fd
+ * @param config    [in,out] 配置信息
+ * @param ln        [out] 连接监听器
+ * @param fd        [in]     文件描述符，如socket fd
  * @return 1 - 读取成功；-1 - 读取失败
  */
-int TLCP_SOCKET_Listen_raw(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_Listener *ln, int fd);
+int TLCP_SOCKET_Listen_raw(TLCP_SOCKET_CONFIG *config, TLCP_SOCKET_Listener *ln, int fd);
 
 /**
  * 关闭TLCP服务端监听
@@ -276,13 +276,13 @@ ssize_t TLCP_SOCKET_Write(TLCP_SOCKET_CONNECT *conn, void *buf, size_t count);
 /**
  * 连接TLCP服务端，并进行TLCP握手
  *
- * @param ctx       [in] 上下文
- * @param conn      [out] TLCP连接
- * @param hostname  [in] 主机地址（IP）
- * @param port      [in] 主机端口
+ * @param config        [in] 配置信息
+ * @param conn          [out] TLCP连接
+ * @param hostname      [in] 主机地址（IP）
+ * @param port          [in] 主机端口
  * @return 1 - 连接成功；-1 - 连接失败
  */
-int TLCP_SOCKET_Dial(TLCP_SOCKET_CONFIG *ctx, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port);
+int TLCP_SOCKET_Dial(TLCP_SOCKET_CONFIG *config, TLCP_SOCKET_CONNECT *conn, const char *hostname, int port);
 
 /**
  * 断开TLCP连接
@@ -296,8 +296,8 @@ void TLCP_SOCKET_Connect_Close(TLCP_SOCKET_CONNECT *conn);
  *
  * @param socket_key    [in,out] 密钥对指针
  * @param cert          [in] 证书指针
- * @param sm2_key       [in] SM2私钥指针
- * @return 1 - 连接成功；-1 - 连接失败
+ * @param sm2_key       [in] SM2私钥
+ * @return 1 - 成功；-1 - 失败
  */
 int TLCP_SOCKET_GMSSL_Key(TLCP_SOCKET_KEY *socket_key, X509_CERTIFICATE *cert, SM2_KEY *sm2_key);
 
