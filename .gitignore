@@ -219,3 +219,5 @@ include/openssl/srp.h
 /rust
 /python
 /build
+.idea
+cmake-build-*
